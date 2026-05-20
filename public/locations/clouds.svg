@@ -1,0 +1,18 @@
+<svg width="100%" viewBox="0 0 680 380" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="c-sky" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#1428a0" stop-opacity="0.6"/><stop offset="60%" stop-color="#1428a0" stop-opacity="0.15"/><stop offset="100%" stop-color="#1428a0" stop-opacity="0"/></radialGradient>
+    <radialGradient id="c-sun" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#ffe080" stop-opacity="0.9"/><stop offset="40%" stop-color="#ffe080" stop-opacity="0.4"/><stop offset="100%" stop-color="#ffe080" stop-opacity="0"/></radialGradient>
+    <radialGradient id="c-cloud" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#d0e8ff" stop-opacity="0.55"/><stop offset="55%" stop-color="#d0e8ff" stop-opacity="0.12"/><stop offset="100%" stop-color="#d0e8ff" stop-opacity="0"/></radialGradient>
+    <radialGradient id="c-pink" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#e080d0" stop-opacity="0.35"/><stop offset="55%" stop-color="#e080d0" stop-opacity="0.08"/><stop offset="100%" stop-color="#e080d0" stop-opacity="0"/></radialGradient>
+  </defs>
+  <rect width="680" height="380" fill="#0a0e28"/>
+  <ellipse cx="340" cy="190" rx="400" ry="280" fill="url(#c-sky)" opacity="1"/>
+  <ellipse cx="340" cy="100" rx="200" ry="180" fill="url(#c-sun)" opacity="0.7"/>
+  <ellipse cx="120" cy="160" rx="240" ry="180" fill="url(#c-cloud)" opacity="0.9"/>
+  <ellipse cx="520" cy="140" rx="260" ry="200" fill="url(#c-cloud)" opacity="0.8"/>
+  <ellipse cx="340" cy="260" rx="320" ry="200" fill="url(#c-cloud)" opacity="0.7"/>
+  <ellipse cx="180" cy="80" rx="180" ry="140" fill="url(#c-pink)" opacity="0.9"/>
+  <ellipse cx="560" cy="300" rx="200" ry="160" fill="url(#c-pink)" opacity="0.7"/>
+  <circle cx="340" cy="96" r="28" fill="#ffe080" opacity="0.6"/>
+  <circle cx="340" cy="96" r="12" fill="#fff4c0" opacity="0.9"/>
+</svg>

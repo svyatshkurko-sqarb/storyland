@@ -1,0 +1,25 @@
+<svg width="100%" viewBox="0 0 680 380" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="s-bg" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#080420" stop-opacity="0.9"/><stop offset="60%" stop-color="#080420" stop-opacity="0.3"/><stop offset="100%" stop-color="#080420" stop-opacity="0"/></radialGradient>
+    <radialGradient id="s-neb1" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#6020c0" stop-opacity="0.5"/><stop offset="55%" stop-color="#6020c0" stop-opacity="0.12"/><stop offset="100%" stop-color="#6020c0" stop-opacity="0"/></radialGradient>
+    <radialGradient id="s-neb2" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#1060c0" stop-opacity="0.45"/><stop offset="55%" stop-color="#1060c0" stop-opacity="0.1"/><stop offset="100%" stop-color="#1060c0" stop-opacity="0"/></radialGradient>
+    <radialGradient id="s-neb3" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#c03080" stop-opacity="0.35"/><stop offset="55%" stop-color="#c03080" stop-opacity="0.08"/><stop offset="100%" stop-color="#c03080" stop-opacity="0"/></radialGradient>
+    <radialGradient id="s-star" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#ffffff" stop-opacity="1"/><stop offset="40%" stop-color="#ffffff" stop-opacity="0.3"/><stop offset="100%" stop-color="#ffffff" stop-opacity="0"/></radialGradient>
+  </defs>
+  <rect width="680" height="380" fill="#04020e"/>
+  <ellipse cx="340" cy="190" rx="400" ry="300" fill="url(#s-bg)" opacity="1"/>
+  <ellipse cx="160" cy="160" rx="320" ry="240" fill="url(#s-neb1)" opacity="0.9"/>
+  <ellipse cx="520" cy="220" rx="300" ry="220" fill="url(#s-neb2)" opacity="0.8"/>
+  <ellipse cx="340" cy="100" rx="260" ry="200" fill="url(#s-neb3)" opacity="0.7"/>
+  <ellipse cx="120" cy="300" rx="200" ry="160" fill="url(#s-neb2)" opacity="0.6"/>
+  <ellipse cx="120" cy="110" rx="14" ry="14" fill="url(#s-star)" opacity="0.9"/>
+  <ellipse cx="260" cy="70" rx="16" ry="16" fill="url(#s-star)" opacity="0.85"/>
+  <ellipse cx="440" cy="90" rx="18" ry="18" fill="url(#s-star)" opacity="0.9"/>
+  <ellipse cx="580" cy="140" rx="14" ry="14" fill="url(#s-star)" opacity="0.8"/>
+  <ellipse cx="340" cy="190" rx="22" ry="22" fill="url(#s-star)" opacity="0.7"/>
+  <circle cx="200" cy="200" r="1.5" fill="#ffffff" opacity="0.6"/>
+  <circle cx="400" cy="60" r="1" fill="#ffffff" opacity="0.5"/>
+  <circle cx="500" cy="280" r="1.5" fill="#c0b0ff" opacity="0.55"/>
+  <circle cx="80" cy="180" r="1" fill="#ffffff" opacity="0.45"/>
+  <circle cx="620" cy="80" r="1.5" fill="#ffffff" opacity="0.5"/>
+</svg>

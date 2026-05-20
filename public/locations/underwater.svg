@@ -1,0 +1,20 @@
+<svg width="100%" viewBox="0 0 680 380" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="w-deep" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#0a2060" stop-opacity="0.8"/><stop offset="60%" stop-color="#0a2060" stop-opacity="0.25"/><stop offset="100%" stop-color="#0a2060" stop-opacity="0"/></radialGradient>
+    <radialGradient id="w-teal" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#0888a8" stop-opacity="0.6"/><stop offset="55%" stop-color="#0888a8" stop-opacity="0.15"/><stop offset="100%" stop-color="#0888a8" stop-opacity="0"/></radialGradient>
+    <radialGradient id="w-glow" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#40d0ff" stop-opacity="0.5"/><stop offset="50%" stop-color="#40d0ff" stop-opacity="0.15"/><stop offset="100%" stop-color="#40d0ff" stop-opacity="0"/></radialGradient>
+    <radialGradient id="w-sp" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#80ffee" stop-opacity="0.9"/><stop offset="50%" stop-color="#80ffee" stop-opacity="0.3"/><stop offset="100%" stop-color="#80ffee" stop-opacity="0"/></radialGradient>
+    <radialGradient id="w-coral" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#ff8060" stop-opacity="0.4"/><stop offset="55%" stop-color="#ff8060" stop-opacity="0.1"/><stop offset="100%" stop-color="#ff8060" stop-opacity="0"/></radialGradient>
+  </defs>
+  <rect width="680" height="380" fill="#040818"/>
+  <ellipse cx="340" cy="190" rx="400" ry="280" fill="url(#w-deep)" opacity="1"/>
+  <ellipse cx="160" cy="280" rx="320" ry="240" fill="url(#w-teal)" opacity="0.9"/>
+  <ellipse cx="520" cy="240" rx="300" ry="220" fill="url(#w-teal)" opacity="0.7"/>
+  <ellipse cx="340" cy="120" rx="240" ry="200" fill="url(#w-glow)" opacity="0.6"/>
+  <ellipse cx="200" cy="100" rx="160" ry="140" fill="url(#w-coral)" opacity="0.8"/>
+  <ellipse cx="560" cy="320" rx="180" ry="140" fill="url(#w-coral)" opacity="0.6"/>
+  <ellipse cx="180" cy="160" rx="24" ry="24" fill="url(#w-sp)" opacity="0.9"/>
+  <ellipse cx="400" cy="110" rx="20" ry="20" fill="url(#w-sp)" opacity="0.85"/>
+  <ellipse cx="520" cy="220" rx="22" ry="22" fill="url(#w-sp)" opacity="0.8"/>
+  <ellipse cx="280" cy="280" rx="18" ry="18" fill="url(#w-sp)" opacity="0.75"/>
+</svg>
