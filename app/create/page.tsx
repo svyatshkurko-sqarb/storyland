@@ -12,6 +12,15 @@ const heroes = [
   { label: "Казкова сова", emoji: "🦉" },
 ];
 
+const defaultHeroNames: Record<string, string> = {
+  "Добрий дракон": "Іскра",
+  "Смілива феєчка": "Соня",
+  "Мандрівний кіт": "Максим",
+  "Хоробрий лис": "Руда",
+  "Мудрий вовк": "Бурко",
+  "Казкова сова": "Зоря",
+};
+
 const places = [
   { label: "казковий ліс", emoji: "🌲" },
   { label: "мрійливе озеро", emoji: "🏞️" },
@@ -71,9 +80,11 @@ function OptionRow({
 export default function CreatePage() {
   const router = useRouter();
   const [selectedHero, setSelectedHero] = useState("");
+  const [selectedHeroName, setSelectedHeroName] = useState("");
   const [selectedPlace, setSelectedPlace] = useState("");
   const [selectedTheme, setSelectedTheme] = useState("");
 
+  const heroName = selectedHeroName.trim() || defaultHeroNames[selectedHero] || "";
   const canStart = selectedHero && selectedPlace && selectedTheme;
 
   const preview = useMemo(() => {
@@ -81,8 +92,8 @@ export default function CreatePage() {
       return "Оберіть героя, місце та тему, щоб побачити, як розгорнеться казка.";
     }
 
-    return `У казці ${selectedHero} вирушає до ${selectedPlace}, де трапляється історія про ${selectedTheme}.`;
-  }, [canStart, selectedHero, selectedPlace, selectedTheme]);
+    return `У казці ${heroName} — ${selectedHero}, який вирушає до ${selectedPlace}, де трапляється історія про ${selectedTheme}.`;
+  }, [canStart, heroName, selectedHero, selectedPlace, selectedTheme]);
 
   return (
     <div className="min-h-screen bg-background px-6 py-10 text-white">
@@ -100,6 +111,20 @@ export default function CreatePage() {
         </div>
 
         <OptionRow title="Герой" items={heroes} selected={selectedHero} onSelect={setSelectedHero} />
+        <div className="rounded-3xl border border-white/10 bg-white/5 p-5 shadow-[0_0_60px_rgba(56,189,248,0.08)]">
+          <label className="font-nunito text-sm font-semibold text-slate-200">
+            Як звати героя? Наприклад, Максим або Соня
+          </label>
+          <input
+            value={selectedHeroName}
+            onChange={(event) => setSelectedHeroName(event.target.value)}
+            placeholder="Як звати героя? Наприклад, Максим або Соня"
+            className="mt-3 w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none transition focus:border-cyan-300/80 focus:bg-white/10"
+          />
+          <p className="mt-3 text-sm text-slate-400">
+            Якщо поле порожнє, буде використано ім'я за замовчуванням для героя.
+          </p>
+        </div>
         <OptionRow title="Місце" items={places} selected={selectedPlace} onSelect={setSelectedPlace} />
         <OptionRow title="Тема" items={themes} selected={selectedTheme} onSelect={setSelectedTheme} />
 
@@ -111,9 +136,9 @@ export default function CreatePage() {
             disabled={!canStart}
             onClick={() =>
               router.push(
-                `/story?hero=${encodeURIComponent(selectedHero)}&place=${encodeURIComponent(
-                  selectedPlace,
-                )}&theme=${encodeURIComponent(selectedTheme)}`,
+                `/story?hero=${encodeURIComponent(selectedHero)}&heroName=${encodeURIComponent(
+                  heroName,
+                )}&place=${encodeURIComponent(selectedPlace)}&theme=${encodeURIComponent(selectedTheme)}`,
               )
             }
             className={`mt-8 inline-flex items-center justify-center rounded-full px-8 py-4 text-base font-semibold transition ${

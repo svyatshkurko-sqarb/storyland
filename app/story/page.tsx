@@ -7,19 +7,30 @@ const totalScenes = 4;
 
 const locationImages: Record<string, string> = {
   "казковий ліс": "/locations/forest.svg",
-  "підводне королівство": "/locations/underwater.svg",
+  "мрійливе озеро": "/locations/underwater.svg",
+  "старовинний замок": "/locations/castle.svg",
   "хмарне місто": "/locations/clouds.svg",
-  "стародавній замок": "/locations/castle.svg",
-  "зоряне небо": "/locations/stars.svg",
-  "затишне місто": "/locations/town.svg",
+  "чудовий сад": "/locations/town.svg",
+  "місячна долина": "/locations/stars.svg",
+};
+
+const defaultHeroNames: Record<string, string> = {
+  "Добрий дракон": "Іскра",
+  "Смілива феєчка": "Соня",
+  "Мандрівний кіт": "Максим",
+  "Хоробрий лис": "Руда",
+  "Мудрий вовк": "Бурко",
+  "Казкова сова": "Зоря",
 };
 
 function StoryPageClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const hero = searchParams.get("hero") || "";
+  const heroNameParam = searchParams.get("heroName") || "";
   const place = searchParams.get("place") || "";
   const theme = searchParams.get("theme") || "";
+  const heroName = heroNameParam || defaultHeroNames[hero] || "Друг";
   const locationImage = locationImages[place] ?? "/locations/forest.svg";
 
   const [scene, setScene] = useState<number>(1);
@@ -52,6 +63,7 @@ function StoryPageClient() {
         body: JSON.stringify({
           theme,
           hero,
+          heroName,
           place,
           history: nextHistory,
           scene: nextScene,
@@ -140,7 +152,7 @@ function StoryPageClient() {
           ) : sceneData ? (
             <div className="space-y-8">
               <div className="rounded-3xl border border-white/10 bg-[#15122f] p-7">
-                <p className="font-lora text-2xl leading-9 text-slate-100">{sceneData.parent_prompt ? "Порада батькові" : `Сцена ${scene}`}</p>
+                <p className="font-lora text-2xl leading-9 text-slate-100">{sceneData.ending ? "Порада батькові" : `Сцена ${scene}`}</p>
                 <img
                   src={locationImage}
                   alt={place}
@@ -153,12 +165,25 @@ function StoryPageClient() {
                     display: "block",
                   }}
                 />
-                <p className="mt-5 whitespace-pre-line text-base leading-8 text-slate-200">{sceneData.parent_prompt ?? sceneData.scene_text}</p>
+                <p className="mt-5 whitespace-pre-line text-base leading-8 text-slate-200">
+                  {sceneData.ending ? sceneData.ending : sceneData.scene_text}
+                </p>
               </div>
 
-              {sceneData.parent_prompt ? (
-                <div className="space-y-4">
-                  <p className="text-slate-300">Казка дійшла до останнього моменту. Порадь дитині, що придумати далі.</p>
+              {sceneData.ending ? (
+                <div className="space-y-6">
+                  <div className="rounded-3xl border border-white/10 bg-[#15122f] p-6">
+                    <p className="font-lora text-xl font-semibold text-white">Ваша історія:</p>
+                    <p className="mt-3 italic text-[#b0a8e0]">{sceneData.summary}</p>
+                  </div>
+                  <div className="rounded-3xl border border-white/10 bg-[#15122f] p-6">
+                    <p className="font-lora text-xl font-semibold text-white">А якби...</p>
+                    <p className="mt-3 text-sm text-[#6060a0]">{sceneData.alternative}</p>
+                  </div>
+                  <div className="rounded-3xl border border-[rgba(200,168,64,0.3)] bg-[#15122f] p-6">
+                    <p className="font-lora text-xl font-semibold text-[#c8a840]">Запитайте у дитини:</p>
+                    <p className="mt-3 text-base text-[#c8a840]">{sceneData.parent_prompt}</p>
+                  </div>
                   <button
                     type="button"
                     onClick={() => router.push("/create")}
