@@ -248,7 +248,7 @@ export async function POST(request) {
         theme,
         historyText,
       }),
-      maxTokens: 1024,
+      maxTokens: 2048,
     });
     return Response.json(data);
   }
@@ -269,7 +269,7 @@ export async function POST(request) {
         totalScenes,
         historyText,
       }),
-      maxTokens: 1024,
+      maxTokens: 2048,
     });
 
     // 2. Верифікація
