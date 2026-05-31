@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
 const totalScenes = 4;
@@ -23,6 +23,32 @@ const defaultHeroNames: Record<string, string> = {
   "Казкова сова": "Зоря",
 };
 
+// Повна інформація про сцену для контексту
+interface SceneContext {
+  scene: number;
+  scene_text: string;
+  choice_made: string;
+}
+
+async function fetchScene(params: {
+  theme: string;
+  hero: string;
+  heroName: string;
+  place: string;
+  sceneContextHistory: SceneContext[];
+  scene: number;
+  totalScenes: number;
+}) {
+  const response = await fetch("/api/story", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(params),
+  });
+
+  if (!response.ok) throw new Error("Не вдалося завантажити сцену.");
+  return response.json();
+}
+
 function StoryPageClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -34,62 +60,118 @@ function StoryPageClient() {
   const locationImage = locationImages[place] ?? "/locations/forest.svg";
 
   const [scene, setScene] = useState<number>(1);
-  const [history, setHistory] = useState<string[]>([]);
+  // Повна історія сцен з текстами — для збереження контексту
+  const [sceneContextHistory, setSceneContextHistory] = useState<SceneContext[]>([]);
   const [sceneData, setSceneData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const hasParams = Boolean(hero && place && theme);
+  // Pre-generated наступні сцени: ключ = "A" або "B"
+  const pregenRef = useRef<Record<string, Promise<any>>>({});
 
+  const hasParams = Boolean(hero && place && theme);
   const progressDots = useMemo(() => Array.from({ length: totalScenes }, (_, idx) => idx + 1), []);
 
   useEffect(() => {
     if (!hasParams) return;
     setScene(1);
-    setHistory([]);
+    setSceneContextHistory([]);
     setSceneData(null);
     setError("");
+    pregenRef.current = {};
     loadScene(1, []);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hero, place, theme]);
 
-  async function loadScene(nextScene: number, nextHistory: string[]) {
+  // Після отримання сцени — одразу pre-generate обидва варіанти наступної
+  useEffect(() => {
+    if (!sceneData || sceneData.ending) return;
+    const nextScene = scene + 1;
+    if (nextScene > totalScenes) return;
+
+    // Pre-generate для варіанту A
+    pregenRef.current["A"] = fetchScene({
+      theme, hero, heroName, place,
+      sceneContextHistory: [
+        ...sceneContextHistory,
+        {
+          scene,
+          scene_text: sceneData.scene_text,
+          choice_made: `A: ${sceneData.choice_a}`,
+        },
+      ],
+      scene: nextScene,
+      totalScenes,
+    });
+
+    // Pre-generate для варіанту B
+    pregenRef.current["B"] = fetchScene({
+      theme, hero, heroName, place,
+      sceneContextHistory: [
+        ...sceneContextHistory,
+        {
+          scene,
+          scene_text: sceneData.scene_text,
+          choice_made: `B: ${sceneData.choice_b}`,
+        },
+      ],
+      scene: nextScene,
+      totalScenes,
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sceneData]);
+
+  async function loadScene(nextScene: number, nextHistory: SceneContext[]) {
     setLoading(true);
     setError("");
     try {
-      const response = await fetch("/api/story", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          theme,
-          hero,
-          heroName,
-          place,
-          history: nextHistory,
-          scene: nextScene,
-          totalScenes,
-        }),
+      const data = await fetchScene({
+        theme, hero, heroName, place,
+        sceneContextHistory: nextHistory,
+        scene: nextScene,
+        totalScenes,
       });
-
-      if (!response.ok) {
-        throw new Error("Не вдалося завантажити сцену. Спробуйте ще раз.");
-      }
-
-      const data = await response.json();
       setSceneData(data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Сталася помилка під час завантаження.");
+      setError(err instanceof Error ? err.message : "Сталася помилка.");
     } finally {
       setLoading(false);
     }
   }
 
-  function handleChoice(optionLabel: string, optionText: string) {
-    const nextHistory = [...history, `${optionLabel}: ${optionText}`];
+  async function handleChoice(optionLabel: "A" | "B", optionText: string) {
+    if (!sceneData) return;
+
+    // Додаємо поточну сцену з вибором до повної історії
+    const newContext: SceneContext = {
+      scene,
+      scene_text: sceneData.scene_text,
+      choice_made: `${optionLabel}: ${optionText}`,
+    };
+    const nextHistory = [...sceneContextHistory, newContext];
     const nextScene = scene + 1;
-    setHistory(nextHistory);
+
+    setSceneContextHistory(nextHistory);
     setScene(nextScene);
-    loadScene(nextScene, nextHistory);
+    setSceneData(null);
+    setLoading(true);
+    setError("");
+
+    try {
+      // Беремо pre-generated сцену якщо є
+      const pregenPromise = pregenRef.current[optionLabel];
+      pregenRef.current = {}; // очищаємо
+
+      const data = pregenPromise
+        ? await pregenPromise
+        : await fetchScene({ theme, hero, heroName, place, sceneContextHistory: nextHistory, scene: nextScene, totalScenes });
+
+      setSceneData(data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Сталася помилка.");
+    } finally {
+      setLoading(false);
+    }
   }
 
   if (!hasParams) {
@@ -126,9 +208,7 @@ function StoryPageClient() {
               {progressDots.map((dot) => (
                 <span
                   key={dot}
-                  className={`h-3 w-3 rounded-full transition ${
-                    dot <= scene ? "bg-cyan-300" : "bg-white/15"
-                  }`}
+                  className={`h-3 w-3 rounded-full transition ${dot <= scene ? "bg-cyan-300" : "bg-white/15"}`}
                 />
               ))}
             </div>
@@ -137,13 +217,15 @@ function StoryPageClient() {
 
         <div className="rounded-4xl border border-white/10 bg-white/5 p-8 shadow-[0_0_70px_rgba(56,189,248,0.12)]">
           {loading ? (
-            <div className="flex min-h-60 items-center justify-center text-lg text-slate-200">Завантаження сцени…</div>
+            <div className="flex min-h-60 items-center justify-center text-lg text-slate-200">
+              Завантаження сцени…
+            </div>
           ) : error ? (
             <div className="space-y-4">
               <p className="text-lg text-rose-200">{error}</p>
               <button
                 type="button"
-                onClick={() => loadScene(scene, history)}
+                onClick={() => loadScene(scene, sceneContextHistory)}
                 className="inline-flex items-center justify-center rounded-full bg-linear-to-r from-violet-500 via-cyan-400 to-amber-400 px-6 py-3 text-sm font-semibold text-background"
               >
                 Спробувати ще раз
@@ -152,7 +234,9 @@ function StoryPageClient() {
           ) : sceneData ? (
             <div className="space-y-8">
               <div className="rounded-3xl border border-white/10 bg-[#15122f] p-7">
-                <p className="font-lora text-2xl leading-9 text-slate-100">{sceneData.ending ? "Порада батькові" : `Сцена ${scene}`}</p>
+                <p className="font-lora text-2xl leading-9 text-slate-100">
+                  {sceneData.ending ? "Порада батькові" : `Сцена ${scene}`}
+                </p>
                 <img
                   src={locationImage}
                   alt={place}

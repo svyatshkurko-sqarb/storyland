@@ -31,9 +31,17 @@ const SYSTEM_PROMPT = `Ти оповідач дитячих інтерактив
 // ═══════════════════════════════════════
 function buildScenePrompt({ hero, heroName, place, theme, scene, totalScenes, historyText }) {
   return `Вік дитини: 4–8 років. Тема: ${theme}. Герой: ${hero}, звати ${heroName}. Місце: ${place}.
-Це сцена ${scene} з ${totalScenes}. Попередні вибори: ${historyText}.
+Це сцена ${scene} з ${totalScenes}. 
 
 Імʼя героя НЕ ЗМІНЮЄТЬСЯ протягом всієї казки.
+
+КОНТЕКСТ ПОПЕРЕДНІХ СЦЕН:
+${historyText}
+
+Нова сцена має органічно продовжувати те що відбулось раніше:
+— Всі персонажі які з'явились раніше залишаються в казці якщо не пішли
+— Місце дії змінюється тільки якщо це випливає з попереднього вибору
+— Настрій і тон продовжують попередню сцену
 
 ОБОВ'ЯЗКОВА СТРУКТУРА ЦІЄЇ СЦЕНИ
 
@@ -134,7 +142,7 @@ ${scene_text}
 ВАРІАНТ Б: ${choice_b}
 ТИП ВИБОРУ: ${choice_type}
 ТЕМА КАЗКИ: ${theme}
-ВИБОРИ ДО ЦЬОГО: ${historyText}
+КОНТЕКСТ: ${historyText}
 
 ЧЕКЛІСТ
 
@@ -170,7 +178,8 @@ function buildFinalPrompt({ hero, heroName, theme, historyText }) {
   return `Ти оповідач дитячих інтерактивних казок українською мовою.
 Вік дитини: 4–8 років. Тема: ${theme}. Герой: ${hero}, звати ${heroName}.
 
-Це фінальна сцена казки. Дитина зробила такі вибори: ${historyText}.
+Це фінальна сцена казки. Ось повний шлях який пройшла дитина:
+${historyText}
 
 Твоє завдання — завершити казку повноцінно і дати батькам інструмент для розмови.
 
@@ -206,7 +215,7 @@ parent_prompt:
 // ═══════════════════════════════════════
 // ДОПОМІЖНА ФУНКЦІЯ — виклик Claude
 // ═══════════════════════════════════════
-async function callClaude({ system = null, prompt, maxTokens = 1024 }) {
+async function callClaude({ system = null, prompt, maxTokens = 2048 }) {
   const params = {
     model: "claude-sonnet-4-5",
     max_tokens: maxTokens,
@@ -229,15 +238,20 @@ export async function POST(request) {
     hero,
     heroName,
     place,
-    history = [],
+    sceneContextHistory = [],
     scene = 1,
     totalScenes = 4,
   } = await request.json();
 
-  const safeHistory = Array.isArray(history) ? history : [history];
-  const historyText = safeHistory.length > 0 ? safeHistory.join("; ") : "початок казки";
-  const isFinalScene = Number(scene) >= Number(totalScenes);
   const finalHeroName = heroName || hero;
+  const isFinalScene = Number(scene) >= Number(totalScenes);
+
+  // Формуємо багатий контекст з повними текстами сцен
+  const historyText = sceneContextHistory.length > 0
+    ? sceneContextHistory.map(s =>
+        `Сцена ${s.scene}:\n${s.scene_text}\n→ Вибір дитини: ${s.choice_made}`
+      ).join("\n\n---\n\n")
+    : "початок казки";
 
   // ФІНАЛЬНА СЦЕНА
   if (isFinalScene) {
