@@ -23,7 +23,6 @@ const defaultHeroNames: Record<string, string> = {
   "Казкова сова": "Зоря",
 };
 
-// Повна інформація про сцену для контексту
 interface SceneContext {
   scene: number;
   scene_text: string;
@@ -60,7 +59,6 @@ function StoryPageClient() {
   const locationImage = locationImages[place] ?? "/locations/forest.svg";
 
   const [scene, setScene] = useState<number>(1);
-  // Повна історія сцен з текстами — для збереження контексту
   const [sceneContextHistory, setSceneContextHistory] = useState<SceneContext[]>([]);
   const [sceneData, setSceneData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
@@ -80,14 +78,17 @@ function StoryPageClient() {
     setError("");
     pregenRef.current = {};
     loadScene(1, []);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hero, place, theme]);
 
-  // Після отримання сцени — одразу pre-generate обидва варіанти наступної
+  // Pre-generate наступну сцену поки дитина читає поточну
   useEffect(() => {
     if (!sceneData || sceneData.ending) return;
-    const nextScene = scene + 1;
-    if (nextScene > totalScenes) return;
+
+    const nextSceneNum = scene + 1;
+
+    // Не pre-generate якщо наступна — остання (фінал генерується після вибору)
+    if (nextSceneNum >= totalScenes) return;
 
     // Pre-generate для варіанту A
     pregenRef.current["A"] = fetchScene({
@@ -100,7 +101,7 @@ function StoryPageClient() {
           choice_made: `A: ${sceneData.choice_a}`,
         },
       ],
-      scene: nextScene,
+      scene: nextSceneNum,
       totalScenes,
     });
 
@@ -115,10 +116,10 @@ function StoryPageClient() {
           choice_made: `B: ${sceneData.choice_b}`,
         },
       ],
-      scene: nextScene,
+      scene: nextSceneNum,
       totalScenes,
     });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sceneData]);
 
   async function loadScene(nextScene: number, nextHistory: SceneContext[]) {
@@ -142,7 +143,6 @@ function StoryPageClient() {
   async function handleChoice(optionLabel: "A" | "B", optionText: string) {
     if (!sceneData) return;
 
-    // Додаємо поточну сцену з вибором до повної історії
     const newContext: SceneContext = {
       scene,
       scene_text: sceneData.scene_text,
@@ -158,13 +158,31 @@ function StoryPageClient() {
     setError("");
 
     try {
-      // Беремо pre-generated сцену якщо є
+      // Якщо наступна сцена — фінал, генеруємо напряму (не pre-generate)
+      if (nextScene >= totalScenes) {
+        pregenRef.current = {};
+        const data = await fetchScene({
+          theme, hero, heroName, place,
+          sceneContextHistory: nextHistory,
+          scene: nextScene,
+          totalScenes,
+        });
+        setSceneData(data);
+        return;
+      }
+
+      // Інакше — беремо pre-generated якщо є
       const pregenPromise = pregenRef.current[optionLabel];
-      pregenRef.current = {}; // очищаємо
+      pregenRef.current = {};
 
       const data = pregenPromise
         ? await pregenPromise
-        : await fetchScene({ theme, hero, heroName, place, sceneContextHistory: nextHistory, scene: nextScene, totalScenes });
+        : await fetchScene({
+            theme, hero, heroName, place,
+            sceneContextHistory: nextHistory,
+            scene: nextScene,
+            totalScenes,
+          });
 
       setSceneData(data);
     } catch (err) {
@@ -195,6 +213,8 @@ function StoryPageClient() {
   return (
     <div className="min-h-screen bg-background px-6 py-10 text-white">
       <div className="mx-auto flex max-w-6xl flex-col gap-8">
+
+        {/* Хедер з прогресом */}
         <div className="rounded-4xl border border-white/10 bg-white/5 p-8 shadow-[0_0_90px_rgba(168,85,247,0.15)]">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
             <div>
@@ -215,6 +235,7 @@ function StoryPageClient() {
           </div>
         </div>
 
+        {/* Основний блок */}
         <div className="rounded-4xl border border-white/10 bg-white/5 p-8 shadow-[0_0_70px_rgba(56,189,248,0.12)]">
           {loading ? (
             <div className="flex min-h-60 items-center justify-center text-lg text-slate-200">
@@ -233,9 +254,11 @@ function StoryPageClient() {
             </div>
           ) : sceneData ? (
             <div className="space-y-8">
+
+              {/* Текст сцени або фінал */}
               <div className="rounded-3xl border border-white/10 bg-[#15122f] p-7">
                 <p className="font-lora text-2xl leading-9 text-slate-100">
-                  {sceneData.ending ? "Порада батькові" : `Сцена ${scene}`}
+                  {sceneData.ending ? "Кінець казки" : `Сцена ${scene}`}
                 </p>
                 <img
                   src={locationImage}
@@ -246,6 +269,7 @@ function StoryPageClient() {
                     objectFit: "cover",
                     borderRadius: "12px",
                     marginBottom: "1.2rem",
+                    marginTop: "1.2rem",
                     display: "block",
                   }}
                 />
@@ -254,6 +278,7 @@ function StoryPageClient() {
                 </p>
               </div>
 
+              {/* Фінал — саммарі для батьків */}
               {sceneData.ending ? (
                 <div className="space-y-6">
                   <div className="rounded-3xl border border-white/10 bg-[#15122f] p-6">
@@ -277,6 +302,7 @@ function StoryPageClient() {
                   </button>
                 </div>
               ) : (
+                /* Вибори */
                 <div className="grid gap-4 sm:grid-cols-2">
                   <button
                     type="button"
@@ -298,7 +324,7 @@ function StoryPageClient() {
               )}
             </div>
           ) : (
-            <div className="min-h-60 items-center justify-center text-lg text-slate-200">
+            <div className="flex min-h-60 items-center justify-center text-lg text-slate-200">
               Починаємо казку…
             </div>
           )}

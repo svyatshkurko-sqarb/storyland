@@ -31,7 +31,7 @@ const SYSTEM_PROMPT = `Ти оповідач дитячих інтерактив
 // ═══════════════════════════════════════
 function buildScenePrompt({ hero, heroName, place, theme, scene, totalScenes, historyText }) {
   return `Вік дитини: 4–8 років. Тема: ${theme}. Герой: ${hero}, звати ${heroName}. Місце: ${place}.
-Це сцена ${scene} з ${totalScenes}. 
+Це сцена ${scene} з ${totalScenes}.
 
 Імʼя героя НЕ ЗМІНЮЄТЬСЯ протягом всієї казки.
 
@@ -39,7 +39,7 @@ function buildScenePrompt({ hero, heroName, place, theme, scene, totalScenes, hi
 ${historyText}
 
 Нова сцена має органічно продовжувати те що відбулось раніше:
-— Всі персонажі які з'явились раніше залишаються в казці якщо не пішли
+— Всі персонажі які зʼявились раніше залишаються в казці якщо не пішли
 — Місце дії змінюється тільки якщо це випливає з попереднього вибору
 — Настрій і тон продовжують попередню сцену
 
@@ -58,12 +58,33 @@ ${historyText}
 
 3. МОМЕНТ ДВОХ ЕМОЦІЙ ОДНОЧАСНО
    Герой хоче одне — але водночас боїться або соромиться.
-   Покажи це через дію або діалог, не через авторський коментар.
-   Приклад: герой вже розвернувся щоб піти — але зупинився і повернувся.
+   Покажи це через дію або діалог — НЕ через авторський коментар.
+   
+   ЗАМІСТЬ авторського коментаря — конкретна фізична дія:
+   Неправильно: "Едуард відчув страх"
+   Правильно: "Едуард зробив крок назад. Потім ще один."
+   
+   Неправильно: "Йому так хотілося але він боявся"
+   Правильно: "Едуард вже розправив крила. Склав. Розправив знову."
+   
+   Неправильно: "Сема злякано притих"
+   Правильно: "Сема вчепився лапками в луску і не відпускав."
 
 4. МАЙЖЕ-ФРАЗА
    Герой починає говорити автоматичну фразу — і зупиняється.
-   Формат: — Нічого стра... — почав було герой. І замовк. Бо знав що це неправда.
+   Це фраза яку кажуть "за звичкою" коли не знають що сказати.
+   
+   Варіанти автоматичних фраз:
+   — "Нічого стра..." (коли щось пішло не так)
+   — "Все бу..." (коли хочуть заспокоїти)
+   — "Та лад..." (коли хочуть відмахнутись)
+   — "Не переж..." (коли не знають як підтримати)
+   — "Я ж каза..." (коли хочуть сказати "я був правий")
+   
+   ВАЖЛИВО: у кожній казці — тільки ОДНА майже-фраза від одного персонажа.
+   Не повторювати одну і ту саму фразу двічі в різних сценах.
+   
+   Формат: — Нічого стра... — почав було герой. І замовк.
    Потім він каже щось справжнє замість автоматичного.
 
 ТЕХНІКА ПИСЬМА
@@ -149,7 +170,7 @@ ${scene_text}
 СТРУКТУРА СЦЕНИ:
 1. є_халепа — герой потрапив у смішну ситуацію або сказав щось невдале. Жарт візуальний — дитина може уявити картинку без пояснень. (true/false)
 2. є_етикет — є один з: знайомство, "можна я...", конкретна подяка, конкретне вибачення. "Дякую" без уточнення — НЕ зараховується. (true/false)
-3. є_дві_емоції — герой одночасно хоче і боїться або соромиться. Показано через дію або діалог — не через авторський коментар. (true/false)
+3. є_дві_емоції — герой одночасно хоче і боїться або соромиться. Показано через фізичну дію або діалог — не через авторський коментар типу "він відчув" або "йому хотілося". (true/false)
 4. є_майже_фраза — герой починає автоматичну фразу і зупиняється. Далі каже щось справжнє замість автоматичного. (true/false)
 
 ТЕХНІКА ПИСЬМА:
@@ -225,92 +246,131 @@ async function callClaude({ system = null, prompt, maxTokens = 2048 }) {
 
   const message = await client.messages.create(params);
   const text = message.content[0].text;
-  const clean = text.replace(/```json\n?|\n?```/g, "").trim();
-  return JSON.parse(clean);
+
+  // Очищаємо markdown якщо модель додала
+  const clean = text
+    .replace(/```json\n?/g, "")
+    .replace(/```\n?/g, "")
+    .trim();
+
+  // Знаходимо JSON в тексті навіть якщо є зайвий текст навколо
+  const jsonMatch = clean.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) {
+    console.error("Не знайдено JSON в відповіді моделі:", clean);
+    throw new Error("Модель повернула невалідну відповідь");
+  }
+
+  try {
+    return JSON.parse(jsonMatch[0]);
+  } catch (e) {
+    console.error("JSON parse error:", jsonMatch[0]);
+    throw new Error("Модель повернула невалідний JSON");
+  }
 }
 
 // ═══════════════════════════════════════
 // ОСНОВНИЙ HANDLER
 // ═══════════════════════════════════════
 export async function POST(request) {
-  const {
-    theme,
-    hero,
-    heroName,
-    place,
-    sceneContextHistory = [],
-    scene = 1,
-    totalScenes = 4,
-  } = await request.json();
+  try {
+    const {
+      theme,
+      hero,
+      heroName,
+      place,
+      sceneContextHistory = [],
+      scene = 1,
+      totalScenes = 4,
+    } = await request.json();
 
-  const finalHeroName = heroName || hero;
-  const isFinalScene = Number(scene) >= Number(totalScenes);
+    const finalHeroName = heroName || hero;
+    const isFinalScene = Number(scene) >= Number(totalScenes);
 
-  // Формуємо багатий контекст з повними текстами сцен
-  const historyText = sceneContextHistory.length > 0
-    ? sceneContextHistory.map(s =>
-        `Сцена ${s.scene}:\n${s.scene_text}\n→ Вибір дитини: ${s.choice_made}`
-      ).join("\n\n---\n\n")
-    : "початок казки";
+    // Формуємо багатий контекст з повними текстами сцен
+    const historyText = sceneContextHistory.length > 0
+      ? sceneContextHistory.map(s =>
+          `Сцена ${s.scene}:\n${s.scene_text}\n→ Вибір дитини: ${s.choice_made}`
+        ).join("\n\n---\n\n")
+      : "початок казки";
 
-  // ФІНАЛЬНА СЦЕНА
-  if (isFinalScene) {
-    const data = await callClaude({
-      prompt: buildFinalPrompt({
-        hero,
-        heroName: finalHeroName,
-        theme,
-        historyText,
-      }),
-      maxTokens: 2048,
-    });
-    return Response.json(data);
-  }
-
-  // ЗВИЧАЙНА СЦЕНА — генерація + верифікація (максимум 2 спроби)
-  const MAX_ATTEMPTS = 2;
-
-  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-    // 1. Генерація сцени
-    const sceneData = await callClaude({
-      system: SYSTEM_PROMPT,
-      prompt: buildScenePrompt({
-        hero,
-        heroName: finalHeroName,
-        place,
-        theme,
-        scene,
-        totalScenes,
-        historyText,
-      }),
-      maxTokens: 2048,
-    });
-
-    // 2. Верифікація
-    const verification = await callClaude({
-      prompt: buildVerificationPrompt({
-        scene_text: sceneData.scene_text,
-        choice_a: sceneData.choice_a,
-        choice_b: sceneData.choice_b,
-        choice_type: sceneData.choice_type,
-        theme,
-        historyText,
-      }),
-      maxTokens: 512,
-    });
-
-    // 3. Якщо пройшла — віддаємо результат
-    if (verification.пройшла) {
-      return Response.json(sceneData);
+    // ФІНАЛЬНА СЦЕНА
+    if (isFinalScene) {
+      const data = await callClaude({
+        prompt: buildFinalPrompt({
+          hero,
+          heroName: finalHeroName,
+          theme,
+          historyText,
+        }),
+        maxTokens: 2048,
+      });
+      return Response.json(data);
     }
 
-    // 4. Якщо остання спроба і не пройшла — віддаємо все одно
-    if (attempt === MAX_ATTEMPTS) {
-      console.warn("Верифікація не пройшла після", MAX_ATTEMPTS, "спроб:", verification.причина_відмови);
-      return Response.json(sceneData);
+    // ЗВИЧАЙНА СЦЕНА — генерація + верифікація (максимум 2 спроби)
+    const MAX_ATTEMPTS = 2;
+
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+      // 1. Генерація сцени
+      const sceneData = await callClaude({
+        system: SYSTEM_PROMPT,
+        prompt: buildScenePrompt({
+          hero,
+          heroName: finalHeroName,
+          place,
+          theme,
+          scene,
+          totalScenes,
+          historyText,
+        }),
+        maxTokens: 2048,
+      });
+
+      // 2. Верифікація
+      let verification;
+      try {
+        verification = await callClaude({
+          prompt: buildVerificationPrompt({
+            scene_text: sceneData.scene_text,
+            choice_a: sceneData.choice_a,
+            choice_b: sceneData.choice_b,
+            choice_type: sceneData.choice_type,
+            theme,
+            historyText,
+          }),
+          maxTokens: 512,
+        });
+      } catch (verifyError) {
+        // Якщо верифікація крашнулась — віддаємо сцену без перевірки
+        console.warn("Верифікація крашнулась:", verifyError.message);
+        return Response.json(sceneData);
+      }
+
+      // 3. Якщо пройшла — віддаємо результат
+      if (verification.пройшла) {
+        return Response.json(sceneData);
+      }
+
+      // 4. Якщо остання спроба і не пройшла — віддаємо все одно
+      if (attempt === MAX_ATTEMPTS) {
+        console.warn(
+          "Верифікація не пройшла після", MAX_ATTEMPTS, "спроб:",
+          verification.причина_відмови
+        );
+        return Response.json(sceneData);
+      }
+
+      // 5. Інакше — повторна генерація
+      console.log(
+        `Спроба ${attempt} не пройшла верифікацію: ${verification.причина_відмови}. Повторна генерація...`
+      );
     }
 
-    // 5. Інакше — повторна генерація
-    console.log(`Спроба ${attempt} не пройшла верифікацію: ${verification.причина_відмови}. Повторна генерація...`);
+  } catch (error) {
+    console.error("Критична помилка в /api/story:", error.message);
+    return Response.json(
+      { error: "Не вдалося згенерувати сцену. Спробуйте ще раз." },
+      { status: 500 }
+    );
   }
 }
