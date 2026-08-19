@@ -1,0 +1,358 @@
+import Anthropic from "@anthropic-ai/sdk";
+import {
+  assembleFinalSystemPrompt,
+  assembleSceneSystemPrompt,
+  getCharacterInfo,
+  getSkillName,
+  isValidStoryParams,
+  loadFallbackCaregiverSummary,
+  type StoryParams,
+} from "@/lib/contentAssembler";
+
+const client = new Anthropic();
+
+// ═══════════════════════════════════════
+// USER ПРОМПТ — генерація сцени
+// ═══════════════════════════════════════
+function buildScenePrompt({
+  skillSubtopic,
+  characterName,
+  scene,
+  totalScenes,
+  historyText,
+  usedMaybePhrase,
+  usedEtiquette,
+}: {
+  skillSubtopic: string;
+  characterName: string;
+  scene: number;
+  totalScenes: number;
+  historyText: string;
+  usedMaybePhrase: boolean;
+  usedEtiquette: boolean;
+}) {
+  return `Поведінкова підтема цієї казки: ${skillSubtopic} (див. розділ "Підтеми, валідовані для MVP" у навичці вище).
+Це сцена ${scene} з ${totalScenes}.
+
+Імʼя героя НЕ ЗМІНЮЄТЬСЯ протягом всієї казки — завжди ${characterName}.
+
+КОНТЕКСТ ПОПЕРЕДНІХ СЦЕН:
+${historyText}
+
+Нова сцена продовжує попередню органічно:
+— Персонажі які зʼявились раніше залишаються якщо не пішли
+— Місце дії змінюється тільки якщо це випливає з попереднього вибору
+— Настрій і тон продовжують попередню сцену
+
+${usedMaybePhrase ? '— Майже-фраза вже була використана раніше — в цій сцені її НЕ МАЄ БУТИ.' : ''}
+${usedEtiquette ? '— Момент етикету вже був — в цій сцені не потрібен.' : ''}
+
+ВИБІР ДЛЯ ДИТИНИ
+
+Два типи вибору — чергуй їх протягом казки:
+
+ТИП 1 — СЮЖЕТНИЙ
+Чистий вибір пригоди. Обидва варіанти нейтральні — просто різні напрямки.
+Мета: дитина відчуває що керує історією.
+
+ТИП 2 — ТЕМАТИЧНИЙ
+Два варіанти контрастно відображають типовий неефективний спосіб дії проти альтернативної
+стратегії з навички вище (див. "Заборонені формулювання варіантів вибору" в навичці — це НЕ
+очевидне добре/погане, обидва варіанти психологічно правдоподібні).
+Дитина моделює реальну ситуацію через безпечний простір казки.
+Обов'язково є хоча б один тематичний вибір за казку.
+
+ПРАВИЛА ДЛЯ ОБОХ ТИПІВ:
+— Формулювання від імені героя: не "що зробити ${characterName}?" а "${characterName} подивився вперед... і назад... Куди йти?"
+— Обидва варіанти однаково привабливі
+— Дотримуйся обмежень вікового режиму (к-сть сцен/персонажів/мова) з розділу вище
+
+Відповідай ТІЛЬКИ JSON без markdown і без пояснень:
+{"scene_text":"...","choice_a":"...","choice_b":"...","choice_type":"сюжетний/тематичний","used_maybe_phrase":true/false,"used_etiquette":true/false}`;
+}
+
+// ═══════════════════════════════════════
+// ПРОМПТ ВЕРИФІКАЦІЇ
+// ═══════════════════════════════════════
+function buildVerificationPrompt({
+  scene_text,
+  choice_a,
+  choice_b,
+  choice_type,
+  skillSubtopic,
+  historyText,
+  usedMaybePhrase,
+  usedEtiquette,
+}: {
+  scene_text: string;
+  choice_a: string;
+  choice_b: string;
+  choice_type: string;
+  skillSubtopic: string;
+  historyText: string;
+  usedMaybePhrase: boolean;
+  usedEtiquette: boolean;
+}) {
+  return `Перевір цю сцену дитячої казки. Відповідай тільки JSON.
+
+СЦЕНА:
+${scene_text}
+
+ВАРІАНТ А: ${choice_a}
+ВАРІАНТ Б: ${choice_b}
+ТИП ВИБОРУ: ${choice_type}
+ПОВЕДІНКОВА ПІДТЕМА: ${skillSubtopic}
+КОНТЕКСТ: ${historyText}
+
+АБСОЛЮТНІ ЗАБОРОНИ — кожна з них одразу дає пройшла:false:
+
+1. немає_авторських_коментарів — відсутні: "відчув як...", "йому хотілося", "стало тепло", "серце стиснулося", "сльози самі покотилися", будь-який опис внутрішнього стану героя від автора. (true/false)
+
+2. немає_шаблонних_дій — відсутні: дивитись під лапи потім на небо, крок вперед-назад, крила розправив-склав, та інші дії які не розкривають характер саме цього персонажа. (true/false)
+
+3. немає_прямої_моралі — мораль не озвучується прямо, немає "справжній друг / справжня дружба" як фінального висновку, немає повчального резюме. (true/false)
+
+4. немає_незрозумілих_метафор — відсутні поетичні образи які треба пояснювати дитині відповідного віку. (true/false)
+
+5. вибір_збалансований — обидва варіанти однаково привабливі, жоден не виглядає як очевидно правильний або очевидно поганий (див. safety-засади: заборонено очевидне добре/погане, безпечне проти небезпечного, "ти помилився"). (true/false)
+
+6. тематичний_вибір_коректний — перевіряти ТІЛЬКИ якщо choice_type="тематичний": два варіанти контрастно відображають неефективний спосіб дії проти альтернативної стратегії з навички, жоден не є явно "поганим вчинком". Якщо choice_type="сюжетний" — автоматично true. (true/false)
+
+7. safety_якорі_дотримані — не порушено жодне з правил BLOCK у safety-засадах вище (три якорі безпеки, межа емоційної інтенсивності, відповідальність дитини, природні наслідки). (true/false)
+
+СИТУАТИВНА ПЕРЕВІРКА — не є причиною відхилення, але фіксуй:
+
+8. є_діалог — є хоча б один обмін репліками між персонажами. (true/false)
+9. є_центральний_момент — сцена будується навколо одного конкретного моменту а не переліку подій. (true/false)
+10. майже_фраза_не_повторюється — якщо usedMaybePhrase=true і в цій сцені є майже-фраза — це false. Якщо usedMaybePhrase=false — автоматично true. (true/false)
+11. етикет_не_повторюється — якщо usedEtiquette=true і в цій сцені є момент етикету — це false. Якщо usedEtiquette=false — автоматично true. (true/false)
+
+ПРАВИЛО ВІДХИЛЕННЯ: пройшла:false ТІЛЬКИ якщо хоча б один з пунктів 1-7 є false.
+Пункти 8-11 не впливають на пройшла — але фіксуються для логів.
+
+Відповідай ТІЛЬКИ JSON:
+{"немає_авторських_коментарів":true/false,"немає_шаблонних_дій":true/false,"немає_прямої_моралі":true/false,"немає_незрозумілих_метафор":true/false,"вибір_збалансований":true/false,"тематичний_вибір_коректний":true/false,"safety_якорі_дотримані":true/false,"є_діалог":true/false,"є_центральний_момент":true/false,"майже_фраза_не_повторюється":true/false,"етикет_не_повторюється":true/false,"пройшла":true/false,"причина_відмови":"..."/null}`;
+}
+
+// ═══════════════════════════════════════
+// ПРОМПТ ФІНАЛУ
+// ═══════════════════════════════════════
+function buildFinalPrompt({
+  characterName,
+  skillSubtopic,
+  ageBand,
+  historyText,
+}: {
+  characterName: string;
+  skillSubtopic: string;
+  ageBand: string;
+  historyText: string;
+}) {
+  return `Це фінальна сцена казки. Ось повний шлях який пройшла дитина:
+${historyText}
+
+ПРАВИЛА ДЛЯ ФІНАЛУ (4-5 речень):
+— Покажи конкретний результат саме тих виборів через образ і подію — не через пояснення
+— ${characterName} має отримати емоційну крапку: радість, тепло, або легкий смуток з надією
+— Казка має відчуватись завершеною — приходить до берега, не обривається
+— Мораль не озвучується — вона живе в останньому образі або репліці
+— Фінал не може закінчуватись тим що всі просто "усміхнулись і пішли" — потрібна конкретна деталь або репліка яка ставить крапку
+— Ніяких авторських коментарів про внутрішній стан — тільки дія і діалог
+— Герой має продемонструвати observable_skill_demonstration з розділу навички вище (не обов'язково ідеально)
+
+САММАРІ ДЛЯ БАТЬКІВ (caregiver_summary) — заповни за специфікацією вище:
+— skill_name, skill_in_plain_language, why_it_matters, try_today, caregiver_phrase — обов'язкові
+— optional_extra_idea — тільки якщо справді дає нову ідею понад try_today, інакше null
+— childhood_memory_prompt — м'яке запрошення батькам згадати власну історію з дитинства на цю тему (до 20 слів, НЕ завдання дитині — див. заборонені формулювання в специфікації), або null якщо не вдається сформулювати природно
+— age_band: "${ageBand}"
+— source_skill_subtopic: "${skillSubtopic}"
+
+Додатково (понад специфікацію фреймворку, збережено з попередньої версії — цінна самостійна знахідка):
+alternative: одне речення — не "що могло статись інакше в сюжеті", а який інший поведінковий патерн це розкрило б.
+Формулювання: "Інший шлях показав би як..." або "Якби дитина обрала інакше — історія розкрила б..."
+Приклад: "Інший шлях показав би як ініціатива і спільне створення народжують дружбу інакше — не через прийняття, а через дію разом."
+
+parent_prompt: одне відкрите питання.
+— Про реальний досвід дитини, не про героя
+— Таке що батько може поставити природно, без відчуття що це "виховний момент"
+Приклад: "А тобі коли-небудь хотілося щоб хтось побачив те що ти зробив — але ти боявся показати?"
+
+Відповідай ТІЛЬКИ JSON без markdown і без пояснень:
+{"ending":"...","caregiver_summary":{"skill_name":"...","skill_in_plain_language":"...","why_it_matters":"...","try_today":"...","caregiver_phrase":"...","optional_extra_idea":"..."|null,"childhood_memory_prompt":"..."|null},"alternative":"...","parent_prompt":"..."}`;
+}
+
+// ═══════════════════════════════════════
+// ДОПОМІЖНА ФУНКЦІЯ — виклик Claude
+// ═══════════════════════════════════════
+async function callClaude({
+  system,
+  prompt,
+  maxTokens = 2048,
+}: {
+  system?: string;
+  prompt: string;
+  maxTokens?: number;
+}) {
+  const params: Anthropic.MessageCreateParamsNonStreaming = {
+    model: "claude-sonnet-4-5",
+    max_tokens: maxTokens,
+    messages: [{ role: "user", content: prompt }],
+  };
+  if (system) params.system = system;
+
+  const message = await client.messages.create(params);
+  const block = message.content[0];
+  const text = block.type === "text" ? block.text : "";
+
+  const clean = text
+    .replace(/```json\n?/g, "")
+    .replace(/```\n?/g, "")
+    .trim();
+
+  const jsonMatch = clean.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) {
+    console.error("Не знайдено JSON у відповіді:", clean);
+    throw new Error("Модель повернула невалідну відповідь");
+  }
+
+  try {
+    return JSON.parse(jsonMatch[0]);
+  } catch {
+    console.error("JSON parse error:", jsonMatch[0]);
+    throw new Error("Модель повернула невалідний JSON");
+  }
+}
+
+interface SceneContext {
+  scene: number;
+  scene_text: string;
+  choice_made: string;
+  used_maybe_phrase?: boolean;
+  used_etiquette?: boolean;
+}
+
+// ═══════════════════════════════════════
+// ОСНОВНИЙ HANDLER
+// ═══════════════════════════════════════
+export async function POST(request: Request) {
+  try {
+    const body = await request.json();
+    const {
+      skill,
+      skillSubtopic,
+      character,
+      location,
+      ageBand,
+      characterName: characterNameInput,
+      sceneContextHistory = [],
+      scene = 1,
+      totalScenes = 4,
+    } = body as Partial<StoryParams> & {
+      characterName?: string;
+      sceneContextHistory?: SceneContext[];
+      scene?: number;
+      totalScenes?: number;
+    };
+
+    if (!isValidStoryParams({ skill, skillSubtopic, character, location, ageBand })) {
+      return Response.json(
+        { error: "Некоректні параметри казки (skill/skillSubtopic/character/location/ageBand)." },
+        { status: 400 },
+      );
+    }
+
+    const params = { skill, skillSubtopic, character, location, ageBand } as StoryParams;
+    const characterInfo = getCharacterInfo(params.character);
+    const characterName = characterNameInput?.trim() || characterInfo.defaultName;
+    const isFinalScene = Number(scene) >= Number(totalScenes);
+
+    const historyText =
+      sceneContextHistory.length > 0
+        ? sceneContextHistory
+            .map((s) => `Сцена ${s.scene}:\n${s.scene_text}\n→ Вибір дитини: ${s.choice_made}`)
+            .join("\n\n---\n\n")
+        : "початок казки";
+
+    const usedMaybePhrase = sceneContextHistory.some((s) => s.used_maybe_phrase);
+    const usedEtiquette = sceneContextHistory.some((s) => s.used_etiquette);
+
+    // ФІНАЛЬНА СЦЕНА
+    if (isFinalScene) {
+      const data = await callClaude({
+        system: assembleFinalSystemPrompt(params),
+        prompt: buildFinalPrompt({
+          characterName,
+          skillSubtopic: params.skillSubtopic,
+          ageBand: params.ageBand,
+          historyText,
+        }),
+        maxTokens: 2048,
+      });
+      return Response.json({
+        ...data,
+        skill_name: getSkillName(params.skill),
+      });
+    }
+
+    // ЗВИЧАЙНА СЦЕНА — генерація + верифікація (максимум 2 спроби)
+    const MAX_ATTEMPTS = 2;
+    const sceneSystemPrompt = assembleSceneSystemPrompt(params);
+
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+      const sceneData = await callClaude({
+        system: sceneSystemPrompt,
+        prompt: buildScenePrompt({
+          skillSubtopic: params.skillSubtopic,
+          characterName,
+          scene: Number(scene),
+          totalScenes: Number(totalScenes),
+          historyText,
+          usedMaybePhrase,
+          usedEtiquette,
+        }),
+        maxTokens: 2048,
+      });
+
+      let verification;
+      try {
+        verification = await callClaude({
+          prompt: buildVerificationPrompt({
+            scene_text: sceneData.scene_text,
+            choice_a: sceneData.choice_a,
+            choice_b: sceneData.choice_b,
+            choice_type: sceneData.choice_type,
+            skillSubtopic: params.skillSubtopic,
+            historyText,
+            usedMaybePhrase,
+            usedEtiquette,
+          }),
+          maxTokens: 512,
+        });
+      } catch (verifyError) {
+        console.warn("Верифікація крашнулась:", (verifyError as Error).message);
+        return Response.json(sceneData);
+      }
+
+      if (verification.пройшла) {
+        return Response.json(sceneData);
+      }
+
+      if (attempt === MAX_ATTEMPTS) {
+        console.warn("Верифікація не пройшла після", MAX_ATTEMPTS, "спроб:", verification.причина_відмови);
+        return Response.json(sceneData);
+      }
+
+      console.log(`Спроба ${attempt} не пройшла: ${verification.причина_відмови}. Повторна генерація...`);
+    }
+  } catch (error) {
+    console.error("Критична помилка в /api/story:", (error as Error).message);
+    // Фолбек: якщо є достатньо параметрів, повертаємо заготовлене резюме замість повного 500,
+    // щоб дитина принаймні побачила коректний фінал, а не помилку. Для сцен (не фіналу) fallback
+    // caregiver_summary не застосовний — просто повертаємо помилку.
+    return Response.json({ error: "Не вдалося згенерувати сцену. Спробуйте ще раз." }, { status: 500 });
+  }
+}
+
+// Fallback caregiver_summary лишається доступним для викликів з інших місць
+// (напр. якщо в майбутньому кроці Final QA буде відхиляти caregiver_summary).
+export { loadFallbackCaregiverSummary };

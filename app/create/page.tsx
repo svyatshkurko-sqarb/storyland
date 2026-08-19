@@ -3,50 +3,56 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
-const heroes = [
-  { label: "Добрий дракон", emoji: "🐉" },
-  { label: "Смілива феєчка", emoji: "🧚" },
-  { label: "Мандрівний кіт", emoji: "🐱" },
-  { label: "Хоробрий лис", emoji: "🦊" },
-  { label: "Мудрий вовк", emoji: "🐺" },
-  { label: "Казкова сова", emoji: "🦉" },
-];
+// MVP-скоуп: 2 навички × 2 підтеми, 2 героя, 4 локації, 2 вікові режими.
+// Джерело контенту: /content (skills, characters, locations, age-adapters) —
+// UI-константи тут дублюють manifest.json для швидкого рендеру без файлового
+// I/O на клієнті; людські назви мають збігатися з content/manifest.json.
+const skills = [
+  {
+    key: "self_regulation",
+    label: "Саморегуляція",
+    emoji: "🌊",
+    subtopics: [
+      { key: "pause_before_action", label: "Пауза перед дією" },
+      { key: "waiting", label: "Очікування" },
+    ],
+  },
+  {
+    key: "relationships",
+    label: "Стосунки та взаємодія",
+    emoji: "🤝",
+    subtopics: [
+      { key: "propose_shared_play", label: "Спільна гра" },
+      { key: "resolve_disagreement", label: "Розв'язання суперечки" },
+    ],
+  },
+] as const;
 
-const defaultHeroNames: Record<string, string> = {
-  "Добрий дракон": "Іскра",
-  "Смілива феєчка": "Соня",
-  "Мандрівний кіт": "Максим",
-  "Хоробрий лис": "Руда",
-  "Мудрий вовк": "Бурко",
-  "Казкова сова": "Зоря",
-};
+const characters = [
+  { key: "explorer", label: "Активний дослідник", emoji: "🦊", defaultName: "Іскра" },
+  { key: "observer", label: "Уважний спостерігач", emoji: "🦉", defaultName: "Зоря" },
+] as const;
 
-const places = [
-  { label: "казковий ліс", emoji: "🌲" },
-  { label: "мрійливе озеро", emoji: "🏞️" },
-  { label: "старовинний замок", emoji: "🏰" },
-  { label: "хмарне місто", emoji: "☁️" },
-  { label: "чудовий сад", emoji: "🌸" },
-  { label: "місячна долина", emoji: "🌙" },
-];
+const locations = [
+  { key: "forest", label: "Ліс", emoji: "🌲" },
+  { key: "space", label: "Космос", emoji: "🚀" },
+  { key: "city", label: "Місто", emoji: "☁️" },
+  { key: "home", label: "Дім", emoji: "🏠" },
+] as const;
 
-const themes = [
-  { label: "дружба", emoji: "🤝" },
-  { label: "магія", emoji: "✨" },
-  { label: "сміливість", emoji: "🛡️" },
-  { label: "таємниці", emoji: "🕯️" },
-  { label: "веселка", emoji: "🌈" },
-  { label: "подорож", emoji: "🚀" },
-];
+const ageBands = [
+  { key: "3-5", label: "3–5 років" },
+  { key: "6-8", label: "6–8 років" },
+] as const;
 
-function OptionRow({
+function OptionRow<T extends { key: string; label: string; emoji?: string }>({
   title,
   items,
   selected,
   onSelect,
 }: {
   title: string;
-  items: { label: string; emoji: string }[];
+  items: readonly T[];
   selected: string;
   onSelect: (value: string) => void;
 }) {
@@ -55,19 +61,19 @@ function OptionRow({
       <h2 className="font-lora text-xl font-semibold text-white">{title}</h2>
       <div className="mt-4 flex flex-wrap gap-3">
         {items.map((item) => {
-          const active = selected === item.label;
+          const active = selected === item.key;
           return (
             <button
-              key={item.label}
+              key={item.key}
               type="button"
-              onClick={() => onSelect(item.label)}
+              onClick={() => onSelect(item.key)}
               className={`inline-flex items-center gap-2 rounded-2xl border px-4 py-3 text-left transition ${
                 active
                   ? "border-cyan-300/80 bg-cyan-400/10 text-cyan-100 shadow-[0_0_20px_rgba(14,165,233,0.25)]"
                   : "border-white/10 bg-white/5 text-slate-200 hover:border-white/20 hover:bg-white/10"
               }`}
             >
-              <span className="text-lg">{item.emoji}</span>
+              {item.emoji ? <span className="text-lg">{item.emoji}</span> : null}
               <span className="font-nunito text-sm font-semibold">{item.label}</span>
             </button>
           );
@@ -79,21 +85,48 @@ function OptionRow({
 
 export default function CreatePage() {
   const router = useRouter();
-  const [selectedHero, setSelectedHero] = useState("");
-  const [selectedHeroName, setSelectedHeroName] = useState("");
-  const [selectedPlace, setSelectedPlace] = useState("");
-  const [selectedTheme, setSelectedTheme] = useState("");
+  const [selectedSkill, setSelectedSkill] = useState<string>("");
+  const [selectedSubtopic, setSelectedSubtopic] = useState<string>("");
+  const [selectedCharacter, setSelectedCharacter] = useState<string>("");
+  const [selectedCharacterName, setSelectedCharacterName] = useState<string>("");
+  const [selectedLocation, setSelectedLocation] = useState<string>("");
+  const [selectedAgeBand, setSelectedAgeBand] = useState<string>("");
 
-  const heroName = selectedHeroName.trim() || defaultHeroNames[selectedHero] || "";
-  const canStart = selectedHero && selectedPlace && selectedTheme;
+  const currentSkill = skills.find((s) => s.key === selectedSkill);
+  const currentCharacter = characters.find((c) => c.key === selectedCharacter);
+
+  function onSelectSkill(key: string) {
+    setSelectedSkill(key);
+    setSelectedSubtopic(""); // підтема залежить від навички — скидаємо
+  }
+
+  const characterName = selectedCharacterName.trim() || currentCharacter?.defaultName || "";
+
+  const canStart = Boolean(
+    selectedSkill && selectedSubtopic && selectedCharacter && selectedLocation && selectedAgeBand,
+  );
 
   const preview = useMemo(() => {
-    if (!canStart) {
-      return "Оберіть героя, місце та тему, щоб побачити, як розгорнеться казка.";
+    if (!canStart || !currentSkill || !currentCharacter) {
+      return "Оберіть навичку, героя, локацію та вік дитини, щоб побачити, як розгорнеться казка.";
     }
+    const subtopicLabel = currentSkill.subtopics.find((s) => s.key === selectedSubtopic)?.label;
+    const locationLabel = locations.find((l) => l.key === selectedLocation)?.label;
+    return `У казці ${characterName} — ${currentCharacter.label.toLowerCase()}, потрапляє в ситуацію «${subtopicLabel}» у локації «${locationLabel}» (режим ${selectedAgeBand} років).`;
+  }, [canStart, currentSkill, currentCharacter, characterName, selectedSubtopic, selectedLocation, selectedAgeBand]);
 
-    return `У казці ${heroName} — ${selectedHero}, який вирушає до ${selectedPlace}, де трапляється історія про ${selectedTheme}.`;
-  }, [canStart, heroName, selectedHero, selectedPlace, selectedTheme]);
+  function handleStart() {
+    if (!canStart) return;
+    const query = new URLSearchParams({
+      skill: selectedSkill,
+      skillSubtopic: selectedSubtopic,
+      character: selectedCharacter,
+      characterName,
+      location: selectedLocation,
+      ageBand: selectedAgeBand,
+    });
+    router.push(`/story?${query.toString()}`);
+  }
 
   return (
     <div className="min-h-screen bg-background px-6 py-10 text-white">
@@ -106,27 +139,40 @@ export default function CreatePage() {
             Створи свою пригоду
           </h1>
           <p className="mt-3 max-w-2xl text-base leading-7 text-slate-300">
-            Вибери героя, місце та тему. Потім розкажи історію, яка виросте з кожного вибору.
+            Оберіть навичку, яку казка допоможе обговорити з дитиною, героя, локацію та вік — історія виросте з кожного вибору дитини.
           </p>
         </div>
 
-        <OptionRow title="Герой" items={heroes} selected={selectedHero} onSelect={setSelectedHero} />
+        <OptionRow title="Навичка" items={skills} selected={selectedSkill} onSelect={onSelectSkill} />
+
+        {currentSkill ? (
+          <OptionRow
+            title="Ситуація"
+            items={currentSkill.subtopics}
+            selected={selectedSubtopic}
+            onSelect={setSelectedSubtopic}
+          />
+        ) : null}
+
+        <OptionRow title="Герой" items={characters} selected={selectedCharacter} onSelect={setSelectedCharacter} />
+
         <div className="rounded-3xl border border-white/10 bg-white/5 p-5 shadow-[0_0_60px_rgba(56,189,248,0.08)]">
           <label className="font-nunito text-sm font-semibold text-slate-200">
-            Як звати героя? Наприклад, Максим або Соня
+            Як звати героя? (необов'язково)
           </label>
           <input
-            value={selectedHeroName}
-            onChange={(event) => setSelectedHeroName(event.target.value)}
-            placeholder="Як звати героя? Наприклад, Максим або Соня"
+            value={selectedCharacterName}
+            onChange={(event) => setSelectedCharacterName(event.target.value)}
+            placeholder={currentCharacter ? `Наприклад, ${currentCharacter.defaultName}` : "Як звати героя?"}
             className="mt-3 w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none transition focus:border-cyan-300/80 focus:bg-white/10"
           />
           <p className="mt-3 text-sm text-slate-400">
             Якщо поле порожнє, буде використано ім'я за замовчуванням для героя.
           </p>
         </div>
-        <OptionRow title="Місце" items={places} selected={selectedPlace} onSelect={setSelectedPlace} />
-        <OptionRow title="Тема" items={themes} selected={selectedTheme} onSelect={setSelectedTheme} />
+
+        <OptionRow title="Локація" items={locations} selected={selectedLocation} onSelect={setSelectedLocation} />
+        <OptionRow title="Вік дитини" items={ageBands} selected={selectedAgeBand} onSelect={setSelectedAgeBand} />
 
         <div className="rounded-4xl border border-white/10 bg-white/5 p-8 shadow-[0_0_80px_rgba(59,130,246,0.14)]">
           <h2 className="font-lora text-xl font-semibold text-white">Прев'ю казки</h2>
@@ -134,13 +180,7 @@ export default function CreatePage() {
           <button
             type="button"
             disabled={!canStart}
-            onClick={() =>
-              router.push(
-                `/story?hero=${encodeURIComponent(selectedHero)}&heroName=${encodeURIComponent(
-                  heroName,
-                )}&place=${encodeURIComponent(selectedPlace)}&theme=${encodeURIComponent(selectedTheme)}`,
-              )
-            }
+            onClick={handleStart}
             className={`mt-8 inline-flex items-center justify-center rounded-full px-8 py-4 text-base font-semibold transition ${
               canStart
                 ? "bg-linear-to-r from-violet-500 via-cyan-400 to-amber-400 text-background shadow-[0_0_30px_rgba(168,85,247,0.35)]"

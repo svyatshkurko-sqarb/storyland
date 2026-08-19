@@ -23,7 +23,7 @@ export default function Home() {
               Створити казку
             </Link>
             <Link
-              href="/story?hero=Добрий%20дракон&place=казковий%20ліс&theme=дружба"
+              href="/story?skill=self_regulation&skillSubtopic=pause_before_action&character=explorer&characterName=Іскра&location=forest&ageBand=6-8"
               className="inline-flex items-center justify-center rounded-full border border-white/20 bg-white/5 px-8 py-4 text-base font-semibold text-white transition hover:border-white/40"
             >
               Готова казка

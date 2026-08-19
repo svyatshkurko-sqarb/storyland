@@ -1,0 +1,53 @@
+{
+  "version": "0.1",
+  "note": "Крок 1 (Варіант А, еволюційна міграція): контент-бібліотека для простого 2-кроквого циклу генерація+верифікація в app/api/story/route.ts. Повна 8-крокова pipeline і story_state — пізніший крок.",
+  "shared": {
+    "proseCraft": "content/prose-craft.md",
+    "safetyGuardrails": "content/safety-guardrails.md",
+    "caregiverSummarySpec": "content/caregiver-summary/spec.md"
+  },
+  "skills": {
+    "self_regulation": {
+      "name": "Саморегуляція",
+      "file": "content/skills/self-regulation.md",
+      "subtopics": ["pause_before_action", "waiting"]
+    },
+    "relationships": {
+      "name": "Стосунки та взаємодія",
+      "file": "content/skills/relationships.md",
+      "subtopics": ["propose_shared_play", "resolve_disagreement"]
+    }
+  },
+  "characters": {
+    "explorer": {
+      "name": "Активний дослідник",
+      "file": "content/characters/explorer.md",
+      "defaultName": "Іскра"
+    },
+    "observer": {
+      "name": "Уважний спостерігач",
+      "file": "content/characters/observer.md",
+      "defaultName": "Зоря"
+    }
+  },
+  "locations": {
+    "forest": { "name": "Ліс", "file": "content/locations/forest.md", "image": "/locations/forest.svg" },
+    "space": { "name": "Космос", "file": "content/locations/space.md", "image": "/locations/stars.svg" },
+    "city": { "name": "Місто", "file": "content/locations/city.md", "image": "/locations/town.svg" },
+    "home": { "name": "Дім", "file": "content/locations/home.md", "image": "/locations/castle.svg" }
+  },
+  "ageBands": {
+    "3-5": { "name": "3–5 років", "file": "content/age-adapters/age-3-5.md" },
+    "6-8": { "name": "6–8 років", "file": "content/age-adapters/age-6-8.md" }
+  },
+  "caregiverSummaryFallback": {
+    "self_regulation": {
+      "3-5": "content/caregiver-summary/fallback-templates/self-regulation-3-5.json",
+      "6-8": "content/caregiver-summary/fallback-templates/self-regulation-6-8.json"
+    },
+    "relationships": {
+      "3-5": "content/caregiver-summary/fallback-templates/relationships-3-5.json",
+      "6-8": "content/caregiver-summary/fallback-templates/relationships-6-8.json"
+    }
+  }
+}

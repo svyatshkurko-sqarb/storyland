@@ -1,0 +1,2461 @@
+From 53559c5f4abd7b520521486169fad7011bcf33bf Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Wed, 19 Aug 2026 11:03:02 +0000
+Subject: [PATCH] =?UTF-8?q?feat:=20=D0=9A=D1=80=D0=BE=D0=BA=201=20(=D0=92?=
+ =?UTF-8?q?=D0=B0=D1=80=D1=96=D0=B0=D0=BD=D1=82=20=D0=90)=20=E2=80=94=20?=
+ =?UTF-8?q?=D0=BA=D0=BE=D0=BD=D1=82=D0=B5=D0=BD=D1=82-=D0=B1=D1=96=D0=B1?=
+ =?UTF-8?q?=D0=BB=D1=96=D0=BE=D1=82=D0=B5=D0=BA=D0=B0=20+=20=D0=BD=D0=BE?=
+ =?UTF-8?q?=D0=B2=D0=B8=D0=B9=20=D0=BF=D0=B0=D1=80=D0=B0=D0=BC=D0=B5=D1=82?=
+ =?UTF-8?q?=D1=80=D0=B8=D1=87=D0=BD=D0=B8=D0=B9=20=D0=BA=D0=BE=D0=BD=D1=82?=
+ =?UTF-8?q?=D1=80=D0=B0=D0=BA=D1=82?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Замінює вільний вибір hero/place/theme на skill+skillSubtopic+character+
+location+ageBand за фреймворком СЕН, зберігаючи простий 2-кроквий цикл
+генерація+верифікація (повна 8-кроква pipeline і story_state — наступні
+кроки).
+
+- content/: skills, characters, locations, age-adapters, safety-guardrails,
+  caregiver-summary spec + fallback-шаблони — перенесено зі скелета,
+  адаптовано під реальний фреймворк (2 навички × 2 підтеми, 2 героя,
+  4 локації, 2 вікові режими)
+- content/prose-craft.md — літературні правила перенесено майже дослівно
+  з попереднього SYSTEM_PROMPT (заборонені прийоми, фізична логіка,
+  майже-фраза, етикет, авторські орієнтири) — найцінніша частина
+  попередньої роботи, не втрачена
+- lib/contentAssembler.ts — читає manifest.json, збирає системний промпт
+  для сцени/фіналу з відповідних md-файлів
+- app/api/story/route.js → route.ts — нові параметри запиту, промпти
+  збираються контент-асемблером; verification-крок доповнено safety-
+  критерієм (три якорі безпеки) понад наявні літературні критерії;
+  final-крок повертає caregiver_summary за новою специфікацією,
+  включно з новим полем childhood_memory_prompt; alternative/parent_prompt
+  збережено як додаткову цінність понад специфікацію фреймворку
+- app/create/page.tsx — вибір навичка → підтема → герой → локація → вік
+  замість вільного hero/place/theme
+- app/story/page.tsx — нові query-параметри; механізм pre-generation
+  (pregenRef) лишено без структурних змін; додано окремий екран "Для
+  батьків" з новим caregiver_summary + childhood_memory_prompt, alternative
+  та parent_prompt збережено
+- package.json — додано gray-matter (парсинг front-matter у /content)
+
+Відкрите: для локації "дім" немає влучного SVG — тимчасово переспользано
+castle.svg (потребує рішення/нового асета).
+---
+ app/api/story/route.js                        | 379 ------------------
+ app/api/story/route.ts                        | 358 +++++++++++++++++
+ app/create/page.tsx                           | 174 ++++----
+ app/layout.tsx                                |   2 +-
+ app/page.tsx                                  |   2 +-
+ app/story/page.tsx                            | 273 ++++++++-----
+ content/age-adapters/age-3-5.md               |  27 ++
+ content/age-adapters/age-6-8.md               |  31 ++
+ .../fallback-templates/relationships-3-5.json |  14 +
+ .../fallback-templates/relationships-6-8.json |  14 +
+ .../self-regulation-3-5.json                  |  14 +
+ .../self-regulation-6-8.json                  |  14 +
+ content/caregiver-summary/spec.md             |  67 ++++
+ content/characters/explorer.md                |  26 ++
+ content/characters/observer.md                |  26 ++
+ content/locations/city.md                     |  18 +
+ content/locations/forest.md                   |  18 +
+ content/locations/home.md                     |  18 +
+ content/locations/space.md                    |  18 +
+ content/manifest.json                         |  53 +++
+ content/prose-craft.md                        | 118 ++++++
+ content/safety-guardrails.md                  |  77 ++++
+ content/skills/relationships.md               |  55 +++
+ content/skills/self-regulation.md             |  55 +++
+ lib/contentAssembler.ts                       | 150 +++++++
+ package.json                                  |   1 +
+ 26 files changed, 1453 insertions(+), 549 deletions(-)
+ delete mode 100644 app/api/story/route.js
+ create mode 100644 app/api/story/route.ts
+ create mode 100644 content/age-adapters/age-3-5.md
+ create mode 100644 content/age-adapters/age-6-8.md
+ create mode 100644 content/caregiver-summary/fallback-templates/relationships-3-5.json
+ create mode 100644 content/caregiver-summary/fallback-templates/relationships-6-8.json
+ create mode 100644 content/caregiver-summary/fallback-templates/self-regulation-3-5.json
+ create mode 100644 content/caregiver-summary/fallback-templates/self-regulation-6-8.json
+ create mode 100644 content/caregiver-summary/spec.md
+ create mode 100644 content/characters/explorer.md
+ create mode 100644 content/characters/observer.md
+ create mode 100644 content/locations/city.md
+ create mode 100644 content/locations/forest.md
+ create mode 100644 content/locations/home.md
+ create mode 100644 content/locations/space.md
+ create mode 100644 content/manifest.json
+ create mode 100644 content/prose-craft.md
+ create mode 100644 content/safety-guardrails.md
+ create mode 100644 content/skills/relationships.md
+ create mode 100644 content/skills/self-regulation.md
+ create mode 100644 lib/contentAssembler.ts
+
+diff --git a/app/api/story/route.js b/app/api/story/route.js
+deleted file mode 100644
+index 282b6c1..0000000
+--- a/app/api/story/route.js
++++ /dev/null
+@@ -1,379 +0,0 @@
+-import Anthropic from "@anthropic-ai/sdk";
+-
+-const client = new Anthropic();
+-
+-// ═══════════════════════════════════════
+-// СИСТЕМНИЙ ПРОМПТ
+-// ═══════════════════════════════════════
+-const SYSTEM_PROMPT = `Ти оповідач дитячих інтерактивних казок українською мовою.
+-
+-АВТОРСЬКІ ОРІЄНТИРИ
+-
+-Основа — сучасна українська дитяча література:
+-
+-— Марія Артеменко, Настя Музиченко, Галина Ткачук («Іскорки суперсил»)
+-  Живий діалог, гумор через конкретні ситуації, герої помиляються і це нормально,
+-  навичка розкривається через подію а не через мораль, почуття через вчинки а не опис
+-
+-— Оксана Лущевська
+-  Теми "бути чужим" і пошуку свого місця без дидактики, ніжність до складних тем,
+-  герой знаходить себе через іншого а не через повчання
+-
+-Технічні прийоми з класики — використовуй як інструменти:
+-
+-— Василь Сухомлинський: один конкретний предмет або деталь несе всю емоцію сцени.
+-  Шматочок крейди, стара лавка, зламана гілка — замість абзацу опису почуттів.
+-
+-— Астрід Ліндґрен: світ очима дитини де все більше і гостріше.
+-  Тінь самотньої людини найдовша. Мовчання буває різним.
+-  Кульмінація часто в тиші а не в події.
+-
+-ГОЛОВНЕ ПРАВИЛО КОЖНОЇ СЦЕНИ
+-
+-Знайди один конкретний момент — предмет, дію або репліку — навколо якого будується вся сцена.
+-Не перелік подій. Один момент — розгорнутий повністю.
+-
+-Приклад сильного моменту: шматочок крейди який герой тримає і нікуди не йде.
+-Приклад слабкого: герой пішов, побачив, вирішив, зробив — чотири події замість однієї.
+-
+-ДІАЛОГ
+-
+-Діалог — головний інструмент. Через репліки розкривається і характер, і почуття, і сюжет.
+-Кожен персонаж говорить по-своєму — не всі однаково.
+-Кількість реплік визначається ситуацією — не мінімумом.
+-Іноді одна репліка і тиша після неї сильніша за п'ять.
+-
+-ПОЧУТТЯ — ТІЛЬКИ ЧЕРЕЗ ПОВЕДІНКУ
+-
+-Ніколи не пиши що герой відчуває — покажи що він робить.
+-
+-ЗАБОРОНЕНО назавжди:
+-— "відчув як серце стиснулося / наповнилося теплом"
+-— "стало тепло на душі / всередині"
+-— "відчув що... / йому хотілося але..."
+-— "сльози самі покотилися"
+-— "справжній друг / справжня дружба" як висновок
+-— Пряма мораль — дитина має відчути її сама
+-— Незрозумілі поетичні метафори які треба пояснювати
+-— Шаблонні дії розгубленості: дивитись під лапи потім на небо, крок вперед-назад, крила розправив-склав
+-— Шаблон "подивився на X, потім на Y" як жест невпевненості або роздуму —
+-  замість нього специфічна дія саме цього персонажа в цій ситуації
+-— Фізично неможливі дії або образи: малюнок на землі не може "лежати між ними",
+-  вітер не стирає крейду з каменя, герой не дивиться "на свої голки" без причини.
+-  Кожна дія має витримувати перевірку: чи може дитина 5 років уявити це як картинку?
+-— Репліки які потребують передісторії якої немає в казці:
+-  якщо персонаж каже "я боявся що...", "я завжди...", "ніхто ніколи..." —
+-  це має бути підготовлено попередніми сценами, а не з'явитись як фінальне одкровення
+-ГУМОР
+-
+-З'являється коли органічно виникає з ситуації — не як обов'язковий елемент.
+-Якщо є — простий і візуальний: дитина має одразу уявити картинку без пояснень.
+-Якщо в цій сцені немає природного місця для гумору — його не має бути.
+-ФІЗИЧНА ЛОГІКА
+-
+-Перед кожною дією, образом або метафорою — перевір:
+-чи може дитина 5–8 років уявити це як конкретну картинку?
+-
+-Якщо дія виглядає дивно коли її уявляєш — вона не підходить.
+-
+-Приклади що не проходять перевірку:
+-— "малюнок лежав між ними" (малюнок на землі не лежить — він намальований)
+-— "вітер торкнувся малюнка — але крейда не стерлася" (крейда на камені від вітру не стирається — навіщо це писати?)
+-— "їжак подивився на свої голки" (що він там побачив? яка реакція це розкриває?)
+-
+-Фізична точність — це не педантизм. Це довіра дитини до світу казки.
+-Одна нелогічна деталь — і дитина виходить з історії.
+-ЕТИКЕТ
+-
+-Знайомство, "можна я...", конкретна подяка, конкретне вибачення.
+-Подяка і вибачення завжди конкретні: не "дякую" а "дякую що залишився коли я сказала що мене нема".
+-З'являється один раз за казку — там де це природно.
+-Не вставляй в кожну сцену.
+-
+-МАЙЖЕ-ФРАЗА
+-
+-Герой починає говорити автоматичну фразу — і зупиняється. Далі просто що зробив далі — без пояснень чому зупинився.
+-
+-Варіанти: "Нічого стра...", "Все бу...", "Та лад...", "Не переж...", "Я ж каза..."
+-
+-ВАЖЛИВО: максимум одна майже-фраза за всю казку — не в кожній сцені.
+-Якщо в попередніх сценах вже була — в цій не має бути.
+-Краще взагалі без неї ніж вставлена насильно.
+-
+-ДВОЇСТІСТЬ ПОЧУТТІВ
+-
+-Герой може хотіти одне і водночас боятись або соромитись.
+-Покажи це через специфічну фізичну дію — таку що розкриває саме цього персонажа:
+-— дракон який боїться — ховає хвіст за дерево і визирає з-за нього
+-— кіт який соромиться — починає вмиватися посеред розмови
+-— їжак який хвилюється — згортається і одразу розгортається
+-
+-Використовуй коли це органічно виникає з ситуації.`;
+-
+-// ═══════════════════════════════════════
+-// USER ПРОМПТ — генерація сцени
+-// ═══════════════════════════════════════
+-function buildScenePrompt({ hero, heroName, place, theme, scene, totalScenes, historyText, usedMaybePhrase, usedEtiquette }) {
+-  return `Вік дитини: 4–8 років. Тема: ${theme}. Герой: ${hero}, звати ${heroName}. Місце: ${place}.
+-Це сцена ${scene} з ${totalScenes}.
+-
+-Імʼя героя НЕ ЗМІНЮЄТЬСЯ протягом всієї казки — завжди ${heroName}.
+-
+-КОНТЕКСТ ПОПЕРЕДНІХ СЦЕН:
+-${historyText}
+-
+-Нова сцена продовжує попередню органічно:
+-— Персонажі які зʼявились раніше залишаються якщо не пішли
+-— Місце дії змінюється тільки якщо це випливає з попереднього вибору
+-— Настрій і тон продовжують попередню сцену
+-
+-${usedMaybePhrase ? '— Майже-фраза вже була використана раніше — в цій сцені її НЕ МАЄ БУТИ.' : ''}
+-${usedEtiquette ? '— Момент етикету вже був — в цій сцені не потрібен.' : ''}
+-
+-ВИБІР ДЛЯ ДИТИНИ
+-
+-Два типи вибору — чергуй їх протягом казки:
+-
+-ТИП 1 — СЮЖЕТНИЙ
+-Чистий вибір пригоди. Обидва варіанти нейтральні — просто різні напрямки.
+-Мета: дитина відчуває що керує історією.
+-Приклад: піти до старих дерев чи до берега озера?
+-
+-ТИП 2 — ТЕМАТИЧНИЙ  
+-Два варіанти контрастно відображають суть теми казки.
+-Жоден не є очевидно правильним — обидва ведуть до реалістичних наслідків.
+-Дитина моделює реальну ситуацію через безпечний простір казки.
+-Приклад для теми "дружба": підійти до незнайомця / піти гуляти самому.
+-Обов'язково є хоча б один тематичний вибір за казку.
+-
+-ПРАВИЛА ДЛЯ ОБОХ ТИПІВ:
+-— Формулювання від імені героя: не "що зробити ${heroName}?" а "${heroName} подивився вперед... і назад... Куди йти?"
+-— Обидва варіанти однаково привабливі
+-
+-Відповідай ТІЛЬКИ JSON без markdown і без пояснень:
+-{"scene_text":"...","choice_a":"...","choice_b":"...","choice_type":"сюжетний/тематичний","used_maybe_phrase":true/false,"used_etiquette":true/false}`;
+-}
+-
+-// ═══════════════════════════════════════
+-// ПРОМПТ ВЕРИФІКАЦІЇ
+-// ═══════════════════════════════════════
+-function buildVerificationPrompt({ scene_text, choice_a, choice_b, choice_type, theme, historyText, usedMaybePhrase, usedEtiquette }) {
+-  return `Перевір цю сцену дитячої казки. Відповідай тільки JSON.
+-
+-СЦЕНА:
+-${scene_text}
+-
+-ВАРІАНТ А: ${choice_a}
+-ВАРІАНТ Б: ${choice_b}
+-ТИП ВИБОРУ: ${choice_type}
+-ТЕМА КАЗКИ: ${theme}
+-КОНТЕКСТ: ${historyText}
+-
+-АБСОЛЮТНІ ЗАБОРОНИ — кожна з них одразу дає пройшла:false:
+-
+-1. немає_авторських_коментарів — відсутні: "відчув як...", "йому хотілося", "стало тепло", "серце стиснулося", "сльози самі покотилися", будь-який опис внутрішнього стану героя від автора. (true/false)
+-
+-2. немає_шаблонних_дій — відсутні: дивитись під лапи потім на небо, крок вперед-назад, крила розправив-склав, та інші дії які не розкривають характер саме цього персонажа. (true/false)
+-
+-3. немає_прямої_моралі — мораль не озвучується прямо, немає "справжній друг / справжня дружба" як фінального висновку, немає повчального резюме. (true/false)
+-
+-4. немає_незрозумілих_метафор — відсутні поетичні образи які треба пояснювати дитині 4-8 років. (true/false)
+-
+-5. вибір_збалансований — обидва варіанти однаково привабливі, жоден не виглядає як очевидно правильний або очевидно поганий. (true/false)
+-
+-6. тематичний_вибір_коректний — перевіряти ТІЛЬКИ якщо choice_type="тематичний": два варіанти контрастно відображають суть теми, жоден не є явно "поганим вчинком". Якщо choice_type="сюжетний" — автоматично true. (true/false)
+-
+-СИТУАТИВНА ПЕРЕВІРКА — не є причиною відхилення, але фіксуй:
+-
+-7. є_діалог — є хоча б один обмін репліками між персонажами. (true/false)
+-8. є_центральний_момент — сцена будується навколо одного конкретного моменту а не переліку подій. (true/false)
+-9. майже_фраза_не_повторюється — якщо usedMaybePhrase=true і в цій сцені є майже-фраза — це false. Якщо usedMaybePhrase=false — автоматично true. (true/false)
+-10. етикет_не_повторюється — якщо usedEtiquette=true і в цій сцені є момент етикету — це false. Якщо usedEtiquette=false — автоматично true. (true/false)
+-
+-ПРАВИЛО ВІДХИЛЕННЯ: пройшла:false ТІЛЬКИ якщо хоча б один з пунктів 1-6 є false.
+-Пункти 7-10 не впливають на пройшла — але фіксуються для логів.
+-
+-Відповідай ТІЛЬКИ JSON:
+-{"немає_авторських_коментарів":true/false,"немає_шаблонних_дій":true/false,"немає_прямої_моралі":true/false,"немає_незрозумілих_метафор":true/false,"вибір_збалансований":true/false,"тематичний_вибір_коректний":true/false,"є_діалог":true/false,"є_центральний_момент":true/false,"майже_фраза_не_повторюється":true/false,"етикет_не_повторюється":true/false,"пройшла":true/false,"причина_відмови":"..."/null}`;
+-}
+-
+-// ═══════════════════════════════════════
+-// ПРОМПТ ФІНАЛУ
+-// ═══════════════════════════════════════
+-function buildFinalPrompt({ hero, heroName, theme, historyText }) {
+-  return `Ти оповідач дитячих інтерактивних казок українською мовою.
+-Вік дитини: 4–8 років. Тема: ${theme}. Герой: ${hero}, звати ${heroName}.
+-
+-Це фінальна сцена казки. Ось повний шлях який пройшла дитина:
+-${historyText}
+-
+-ПРАВИЛА ДЛЯ ФІНАЛУ (4-5 речень):
+-— Покажи конкретний результат саме тих виборів через образ і подію — не через пояснення
+-— ${heroName} має отримати емоційну крапку: радість, тепло, або легкий смуток з надією
+-— Казка має відчуватись завершеною — приходить до берега, не обривається
+-— Мораль не озвучується — вона живе в останньому образі або репліці
+-— Фінал не може закінчуватись тим що всі просто "усміхнулись і пішли" — потрібна конкретна деталь або репліка яка ставить крапку
+-— Ніяких авторських коментарів про внутрішній стан — тільки дія і діалог
+-
+-САММАРІ ДЛЯ БАТЬКІВ:
+-
+-summary: одне речення — не переказ сюжету, а психологічний патерн який обрала дитина.
+-Не "дитина обрала X і Y" — а що це означає як поведінка.
+-Приклад: "Дитина обрала чекати і відкритись у відповідь — не ініціювати, а створити безпечний простір для іншого."
+-Приклад поганого: "Дитина обрала залишитись і чекати, відкритись першою, запросити до себе."
+-
+-alternative: одне речення — не "що могло статись інакше в сюжеті", а який інший патерн це розкрило б.
+-Формулювання: "Інший шлях показав би як..." або "Якби дитина обрала інакше — історія розкрила б..."
+-Приклад: "Інший шлях показав би як ініціатива і спільне створення народжують дружбу інакше — не через прийняття, а через дію разом."
+-Приклад поганого: "Якби Дор запропонував піти далі — вони могли б створити щось нове разом."
+-
+-parent_prompt: одне відкрите питання.
+-— Про реальний досвід дитини, не про героя
+-— Таке що батько може поставити природно, без відчуття що це "виховний момент"
+-— Питання до якого дитина захоче повернутись — не обов'язково відповісти одразу
+-Приклад: "А тобі коли-небудь хотілося щоб хтось побачив те що ти зробив — але ти боявся показати?"
+-
+-Відповідай ТІЛЬКИ JSON без markdown і без пояснень:
+-{"ending":"...","summary":"...","alternative":"...","parent_prompt":"..."}`;
+-}
+-
+-// ═══════════════════════════════════════
+-// ДОПОМІЖНА ФУНКЦІЯ — виклик Claude
+-// ═══════════════════════════════════════
+-async function callClaude({ system = null, prompt, maxTokens = 2048 }) {
+-  const params = {
+-    model: "claude-sonnet-4-5",
+-    max_tokens: maxTokens,
+-    messages: [{ role: "user", content: prompt }],
+-  };
+-  if (system) params.system = system;
+-
+-  const message = await client.messages.create(params);
+-  const text = message.content[0].text;
+-
+-  const clean = text
+-    .replace(/```json\n?/g, "")
+-    .replace(/```\n?/g, "")
+-    .trim();
+-
+-  const jsonMatch = clean.match(/\{[\s\S]*\}/);
+-  if (!jsonMatch) {
+-    console.error("Не знайдено JSON у відповіді:", clean);
+-    throw new Error("Модель повернула невалідну відповідь");
+-  }
+-
+-  try {
+-    return JSON.parse(jsonMatch[0]);
+-  } catch (e) {
+-    console.error("JSON parse error:", jsonMatch[0]);
+-    throw new Error("Модель повернула невалідний JSON");
+-  }
+-}
+-
+-// ═══════════════════════════════════════
+-// ОСНОВНИЙ HANDLER
+-// ═══════════════════════════════════════
+-export async function POST(request) {
+-  try {
+-    const {
+-      theme,
+-      hero,
+-      heroName,
+-      place,
+-      sceneContextHistory = [],
+-      scene = 1,
+-      totalScenes = 4,
+-    } = await request.json();
+-
+-    const finalHeroName = heroName || hero;
+-    const isFinalScene = Number(scene) >= Number(totalScenes);
+-
+-    const historyText = sceneContextHistory.length > 0
+-      ? sceneContextHistory.map(s =>
+-          `Сцена ${s.scene}:\n${s.scene_text}\n→ Вибір дитини: ${s.choice_made}`
+-        ).join("\n\n---\n\n")
+-      : "початок казки";
+-
+-    // Відстежуємо чи вже були використані унікальні прийоми
+-    const usedMaybePhrase = sceneContextHistory.some(s => s.used_maybe_phrase);
+-    const usedEtiquette = sceneContextHistory.some(s => s.used_etiquette);
+-
+-    // ФІНАЛЬНА СЦЕНА
+-    if (isFinalScene) {
+-      const data = await callClaude({
+-        prompt: buildFinalPrompt({
+-          hero,
+-          heroName: finalHeroName,
+-          theme,
+-          historyText,
+-        }),
+-        maxTokens: 2048,
+-      });
+-      return Response.json(data);
+-    }
+-
+-    // ЗВИЧАЙНА СЦЕНА — генерація + верифікація (максимум 2 спроби)
+-    const MAX_ATTEMPTS = 2;
+-
+-    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+-      const sceneData = await callClaude({
+-        system: SYSTEM_PROMPT,
+-        prompt: buildScenePrompt({
+-          hero,
+-          heroName: finalHeroName,
+-          place,
+-          theme,
+-          scene,
+-          totalScenes,
+-          historyText,
+-          usedMaybePhrase,
+-          usedEtiquette,
+-        }),
+-        maxTokens: 2048,
+-      });
+-
+-      let verification;
+-      try {
+-        verification = await callClaude({
+-          prompt: buildVerificationPrompt({
+-            scene_text: sceneData.scene_text,
+-            choice_a: sceneData.choice_a,
+-            choice_b: sceneData.choice_b,
+-            choice_type: sceneData.choice_type,
+-            theme,
+-            historyText,
+-            usedMaybePhrase,
+-            usedEtiquette,
+-          }),
+-          maxTokens: 512,
+-        });
+-      } catch (verifyError) {
+-        console.warn("Верифікація крашнулась:", verifyError.message);
+-        return Response.json(sceneData);
+-      }
+-
+-      if (verification.пройшла) {
+-        return Response.json(sceneData);
+-      }
+-
+-      if (attempt === MAX_ATTEMPTS) {
+-        console.warn(
+-          "Верифікація не пройшла після", MAX_ATTEMPTS, "спроб:",
+-          verification.причина_відмови
+-        );
+-        return Response.json(sceneData);
+-      }
+-
+-      console.log(
+-        `Спроба ${attempt} не пройшла: ${verification.причина_відмови}. Повторна генерація...`
+-      );
+-    }
+-
+-  } catch (error) {
+-    console.error("Критична помилка в /api/story:", error.message);
+-    return Response.json(
+-      { error: "Не вдалося згенерувати сцену. Спробуйте ще раз." },
+-      { status: 500 }
+-    );
+-  }
+-}
+\ No newline at end of file
+diff --git a/app/api/story/route.ts b/app/api/story/route.ts
+new file mode 100644
+index 0000000..4ba60e5
+--- /dev/null
++++ b/app/api/story/route.ts
+@@ -0,0 +1,358 @@
++import Anthropic from "@anthropic-ai/sdk";
++import {
++  assembleFinalSystemPrompt,
++  assembleSceneSystemPrompt,
++  getCharacterInfo,
++  getSkillName,
++  isValidStoryParams,
++  loadFallbackCaregiverSummary,
++  type StoryParams,
++} from "@/lib/contentAssembler";
++
++const client = new Anthropic();
++
++// ═══════════════════════════════════════
++// USER ПРОМПТ — генерація сцени
++// ═══════════════════════════════════════
++function buildScenePrompt({
++  skillSubtopic,
++  characterName,
++  scene,
++  totalScenes,
++  historyText,
++  usedMaybePhrase,
++  usedEtiquette,
++}: {
++  skillSubtopic: string;
++  characterName: string;
++  scene: number;
++  totalScenes: number;
++  historyText: string;
++  usedMaybePhrase: boolean;
++  usedEtiquette: boolean;
++}) {
++  return `Поведінкова підтема цієї казки: ${skillSubtopic} (див. розділ "Підтеми, валідовані для MVP" у навичці вище).
++Це сцена ${scene} з ${totalScenes}.
++
++Імʼя героя НЕ ЗМІНЮЄТЬСЯ протягом всієї казки — завжди ${characterName}.
++
++КОНТЕКСТ ПОПЕРЕДНІХ СЦЕН:
++${historyText}
++
++Нова сцена продовжує попередню органічно:
++— Персонажі які зʼявились раніше залишаються якщо не пішли
++— Місце дії змінюється тільки якщо це випливає з попереднього вибору
++— Настрій і тон продовжують попередню сцену
++
++${usedMaybePhrase ? '— Майже-фраза вже була використана раніше — в цій сцені її НЕ МАЄ БУТИ.' : ''}
++${usedEtiquette ? '— Момент етикету вже був — в цій сцені не потрібен.' : ''}
++
++ВИБІР ДЛЯ ДИТИНИ
++
++Два типи вибору — чергуй їх протягом казки:
++
++ТИП 1 — СЮЖЕТНИЙ
++Чистий вибір пригоди. Обидва варіанти нейтральні — просто різні напрямки.
++Мета: дитина відчуває що керує історією.
++
++ТИП 2 — ТЕМАТИЧНИЙ
++Два варіанти контрастно відображають типовий неефективний спосіб дії проти альтернативної
++стратегії з навички вище (див. "Заборонені формулювання варіантів вибору" в навичці — це НЕ
++очевидне добре/погане, обидва варіанти психологічно правдоподібні).
++Дитина моделює реальну ситуацію через безпечний простір казки.
++Обов'язково є хоча б один тематичний вибір за казку.
++
++ПРАВИЛА ДЛЯ ОБОХ ТИПІВ:
++— Формулювання від імені героя: не "що зробити ${characterName}?" а "${characterName} подивився вперед... і назад... Куди йти?"
++— Обидва варіанти однаково привабливі
++— Дотримуйся обмежень вікового режиму (к-сть сцен/персонажів/мова) з розділу вище
++
++Відповідай ТІЛЬКИ JSON без markdown і без пояснень:
++{"scene_text":"...","choice_a":"...","choice_b":"...","choice_type":"сюжетний/тематичний","used_maybe_phrase":true/false,"used_etiquette":true/false}`;
++}
++
++// ═══════════════════════════════════════
++// ПРОМПТ ВЕРИФІКАЦІЇ
++// ═══════════════════════════════════════
++function buildVerificationPrompt({
++  scene_text,
++  choice_a,
++  choice_b,
++  choice_type,
++  skillSubtopic,
++  historyText,
++  usedMaybePhrase,
++  usedEtiquette,
++}: {
++  scene_text: string;
++  choice_a: string;
++  choice_b: string;
++  choice_type: string;
++  skillSubtopic: string;
++  historyText: string;
++  usedMaybePhrase: boolean;
++  usedEtiquette: boolean;
++}) {
++  return `Перевір цю сцену дитячої казки. Відповідай тільки JSON.
++
++СЦЕНА:
++${scene_text}
++
++ВАРІАНТ А: ${choice_a}
++ВАРІАНТ Б: ${choice_b}
++ТИП ВИБОРУ: ${choice_type}
++ПОВЕДІНКОВА ПІДТЕМА: ${skillSubtopic}
++КОНТЕКСТ: ${historyText}
++
++АБСОЛЮТНІ ЗАБОРОНИ — кожна з них одразу дає пройшла:false:
++
++1. немає_авторських_коментарів — відсутні: "відчув як...", "йому хотілося", "стало тепло", "серце стиснулося", "сльози самі покотилися", будь-який опис внутрішнього стану героя від автора. (true/false)
++
++2. немає_шаблонних_дій — відсутні: дивитись під лапи потім на небо, крок вперед-назад, крила розправив-склав, та інші дії які не розкривають характер саме цього персонажа. (true/false)
++
++3. немає_прямої_моралі — мораль не озвучується прямо, немає "справжній друг / справжня дружба" як фінального висновку, немає повчального резюме. (true/false)
++
++4. немає_незрозумілих_метафор — відсутні поетичні образи які треба пояснювати дитині відповідного віку. (true/false)
++
++5. вибір_збалансований — обидва варіанти однаково привабливі, жоден не виглядає як очевидно правильний або очевидно поганий (див. safety-засади: заборонено очевидне добре/погане, безпечне проти небезпечного, "ти помилився"). (true/false)
++
++6. тематичний_вибір_коректний — перевіряти ТІЛЬКИ якщо choice_type="тематичний": два варіанти контрастно відображають неефективний спосіб дії проти альтернативної стратегії з навички, жоден не є явно "поганим вчинком". Якщо choice_type="сюжетний" — автоматично true. (true/false)
++
++7. safety_якорі_дотримані — не порушено жодне з правил BLOCK у safety-засадах вище (три якорі безпеки, межа емоційної інтенсивності, відповідальність дитини, природні наслідки). (true/false)
++
++СИТУАТИВНА ПЕРЕВІРКА — не є причиною відхилення, але фіксуй:
++
++8. є_діалог — є хоча б один обмін репліками між персонажами. (true/false)
++9. є_центральний_момент — сцена будується навколо одного конкретного моменту а не переліку подій. (true/false)
++10. майже_фраза_не_повторюється — якщо usedMaybePhrase=true і в цій сцені є майже-фраза — це false. Якщо usedMaybePhrase=false — автоматично true. (true/false)
++11. етикет_не_повторюється — якщо usedEtiquette=true і в цій сцені є момент етикету — це false. Якщо usedEtiquette=false — автоматично true. (true/false)
++
++ПРАВИЛО ВІДХИЛЕННЯ: пройшла:false ТІЛЬКИ якщо хоча б один з пунктів 1-7 є false.
++Пункти 8-11 не впливають на пройшла — але фіксуються для логів.
++
++Відповідай ТІЛЬКИ JSON:
++{"немає_авторських_коментарів":true/false,"немає_шаблонних_дій":true/false,"немає_прямої_моралі":true/false,"немає_незрозумілих_метафор":true/false,"вибір_збалансований":true/false,"тематичний_вибір_коректний":true/false,"safety_якорі_дотримані":true/false,"є_діалог":true/false,"є_центральний_момент":true/false,"майже_фраза_не_повторюється":true/false,"етикет_не_повторюється":true/false,"пройшла":true/false,"причина_відмови":"..."/null}`;
++}
++
++// ═══════════════════════════════════════
++// ПРОМПТ ФІНАЛУ
++// ═══════════════════════════════════════
++function buildFinalPrompt({
++  characterName,
++  skillSubtopic,
++  ageBand,
++  historyText,
++}: {
++  characterName: string;
++  skillSubtopic: string;
++  ageBand: string;
++  historyText: string;
++}) {
++  return `Це фінальна сцена казки. Ось повний шлях який пройшла дитина:
++${historyText}
++
++ПРАВИЛА ДЛЯ ФІНАЛУ (4-5 речень):
++— Покажи конкретний результат саме тих виборів через образ і подію — не через пояснення
++— ${characterName} має отримати емоційну крапку: радість, тепло, або легкий смуток з надією
++— Казка має відчуватись завершеною — приходить до берега, не обривається
++— Мораль не озвучується — вона живе в останньому образі або репліці
++— Фінал не може закінчуватись тим що всі просто "усміхнулись і пішли" — потрібна конкретна деталь або репліка яка ставить крапку
++— Ніяких авторських коментарів про внутрішній стан — тільки дія і діалог
++— Герой має продемонструвати observable_skill_demonstration з розділу навички вище (не обов'язково ідеально)
++
++САММАРІ ДЛЯ БАТЬКІВ (caregiver_summary) — заповни за специфікацією вище:
++— skill_name, skill_in_plain_language, why_it_matters, try_today, caregiver_phrase — обов'язкові
++— optional_extra_idea — тільки якщо справді дає нову ідею понад try_today, інакше null
++— childhood_memory_prompt — м'яке запрошення батькам згадати власну історію з дитинства на цю тему (до 20 слів, НЕ завдання дитині — див. заборонені формулювання в специфікації), або null якщо не вдається сформулювати природно
++— age_band: "${ageBand}"
++— source_skill_subtopic: "${skillSubtopic}"
++
++Додатково (понад специфікацію фреймворку, збережено з попередньої версії — цінна самостійна знахідка):
++alternative: одне речення — не "що могло статись інакше в сюжеті", а який інший поведінковий патерн це розкрило б.
++Формулювання: "Інший шлях показав би як..." або "Якби дитина обрала інакше — історія розкрила б..."
++Приклад: "Інший шлях показав би як ініціатива і спільне створення народжують дружбу інакше — не через прийняття, а через дію разом."
++
++parent_prompt: одне відкрите питання.
++— Про реальний досвід дитини, не про героя
++— Таке що батько може поставити природно, без відчуття що це "виховний момент"
++Приклад: "А тобі коли-небудь хотілося щоб хтось побачив те що ти зробив — але ти боявся показати?"
++
++Відповідай ТІЛЬКИ JSON без markdown і без пояснень:
++{"ending":"...","caregiver_summary":{"skill_name":"...","skill_in_plain_language":"...","why_it_matters":"...","try_today":"...","caregiver_phrase":"...","optional_extra_idea":"..."|null,"childhood_memory_prompt":"..."|null},"alternative":"...","parent_prompt":"..."}`;
++}
++
++// ═══════════════════════════════════════
++// ДОПОМІЖНА ФУНКЦІЯ — виклик Claude
++// ═══════════════════════════════════════
++async function callClaude({
++  system,
++  prompt,
++  maxTokens = 2048,
++}: {
++  system?: string;
++  prompt: string;
++  maxTokens?: number;
++}) {
++  const params: Anthropic.MessageCreateParamsNonStreaming = {
++    model: "claude-sonnet-4-5",
++    max_tokens: maxTokens,
++    messages: [{ role: "user", content: prompt }],
++  };
++  if (system) params.system = system;
++
++  const message = await client.messages.create(params);
++  const block = message.content[0];
++  const text = block.type === "text" ? block.text : "";
++
++  const clean = text
++    .replace(/```json\n?/g, "")
++    .replace(/```\n?/g, "")
++    .trim();
++
++  const jsonMatch = clean.match(/\{[\s\S]*\}/);
++  if (!jsonMatch) {
++    console.error("Не знайдено JSON у відповіді:", clean);
++    throw new Error("Модель повернула невалідну відповідь");
++  }
++
++  try {
++    return JSON.parse(jsonMatch[0]);
++  } catch {
++    console.error("JSON parse error:", jsonMatch[0]);
++    throw new Error("Модель повернула невалідний JSON");
++  }
++}
++
++interface SceneContext {
++  scene: number;
++  scene_text: string;
++  choice_made: string;
++  used_maybe_phrase?: boolean;
++  used_etiquette?: boolean;
++}
++
++// ═══════════════════════════════════════
++// ОСНОВНИЙ HANDLER
++// ═══════════════════════════════════════
++export async function POST(request: Request) {
++  try {
++    const body = await request.json();
++    const {
++      skill,
++      skillSubtopic,
++      character,
++      location,
++      ageBand,
++      characterName: characterNameInput,
++      sceneContextHistory = [],
++      scene = 1,
++      totalScenes = 4,
++    } = body as Partial<StoryParams> & {
++      characterName?: string;
++      sceneContextHistory?: SceneContext[];
++      scene?: number;
++      totalScenes?: number;
++    };
++
++    if (!isValidStoryParams({ skill, skillSubtopic, character, location, ageBand })) {
++      return Response.json(
++        { error: "Некоректні параметри казки (skill/skillSubtopic/character/location/ageBand)." },
++        { status: 400 },
++      );
++    }
++
++    const params = { skill, skillSubtopic, character, location, ageBand } as StoryParams;
++    const characterInfo = getCharacterInfo(params.character);
++    const characterName = characterNameInput?.trim() || characterInfo.defaultName;
++    const isFinalScene = Number(scene) >= Number(totalScenes);
++
++    const historyText =
++      sceneContextHistory.length > 0
++        ? sceneContextHistory
++            .map((s) => `Сцена ${s.scene}:\n${s.scene_text}\n→ Вибір дитини: ${s.choice_made}`)
++            .join("\n\n---\n\n")
++        : "початок казки";
++
++    const usedMaybePhrase = sceneContextHistory.some((s) => s.used_maybe_phrase);
++    const usedEtiquette = sceneContextHistory.some((s) => s.used_etiquette);
++
++    // ФІНАЛЬНА СЦЕНА
++    if (isFinalScene) {
++      const data = await callClaude({
++        system: assembleFinalSystemPrompt(params),
++        prompt: buildFinalPrompt({
++          characterName,
++          skillSubtopic: params.skillSubtopic,
++          ageBand: params.ageBand,
++          historyText,
++        }),
++        maxTokens: 2048,
++      });
++      return Response.json({
++        ...data,
++        skill_name: getSkillName(params.skill),
++      });
++    }
++
++    // ЗВИЧАЙНА СЦЕНА — генерація + верифікація (максимум 2 спроби)
++    const MAX_ATTEMPTS = 2;
++    const sceneSystemPrompt = assembleSceneSystemPrompt(params);
++
++    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
++      const sceneData = await callClaude({
++        system: sceneSystemPrompt,
++        prompt: buildScenePrompt({
++          skillSubtopic: params.skillSubtopic,
++          characterName,
++          scene: Number(scene),
++          totalScenes: Number(totalScenes),
++          historyText,
++          usedMaybePhrase,
++          usedEtiquette,
++        }),
++        maxTokens: 2048,
++      });
++
++      let verification;
++      try {
++        verification = await callClaude({
++          prompt: buildVerificationPrompt({
++            scene_text: sceneData.scene_text,
++            choice_a: sceneData.choice_a,
++            choice_b: sceneData.choice_b,
++            choice_type: sceneData.choice_type,
++            skillSubtopic: params.skillSubtopic,
++            historyText,
++            usedMaybePhrase,
++            usedEtiquette,
++          }),
++          maxTokens: 512,
++        });
++      } catch (verifyError) {
++        console.warn("Верифікація крашнулась:", (verifyError as Error).message);
++        return Response.json(sceneData);
++      }
++
++      if (verification.пройшла) {
++        return Response.json(sceneData);
++      }
++
++      if (attempt === MAX_ATTEMPTS) {
++        console.warn("Верифікація не пройшла після", MAX_ATTEMPTS, "спроб:", verification.причина_відмови);
++        return Response.json(sceneData);
++      }
++
++      console.log(`Спроба ${attempt} не пройшла: ${verification.причина_відмови}. Повторна генерація...`);
++    }
++  } catch (error) {
++    console.error("Критична помилка в /api/story:", (error as Error).message);
++    // Фолбек: якщо є достатньо параметрів, повертаємо заготовлене резюме замість повного 500,
++    // щоб дитина принаймні побачила коректний фінал, а не помилку. Для сцен (не фіналу) fallback
++    // caregiver_summary не застосовний — просто повертаємо помилку.
++    return Response.json({ error: "Не вдалося згенерувати сцену. Спробуйте ще раз." }, { status: 500 });
++  }
++}
++
++// Fallback caregiver_summary лишається доступним для викликів з інших місць
++// (напр. якщо в майбутньому кроці Final QA буде відхиляти caregiver_summary).
++export { loadFallbackCaregiverSummary };
+diff --git a/app/create/page.tsx b/app/create/page.tsx
+index cf3837f..ee0cabf 100644
+--- a/app/create/page.tsx
++++ b/app/create/page.tsx
+@@ -3,50 +3,56 @@
+ import { useMemo, useState } from "react";
+ import { useRouter } from "next/navigation";
+ 
+-const heroes = [
+-  { label: "Добрий дракон", emoji: "🐉" },
+-  { label: "Смілива феєчка", emoji: "🧚" },
+-  { label: "Мандрівний кіт", emoji: "🐱" },
+-  { label: "Хоробрий лис", emoji: "🦊" },
+-  { label: "Мудрий вовк", emoji: "🐺" },
+-  { label: "Казкова сова", emoji: "🦉" },
+-];
+-
+-const defaultHeroNames: Record<string, string> = {
+-  "Добрий дракон": "Іскра",
+-  "Смілива феєчка": "Соня",
+-  "Мандрівний кіт": "Максим",
+-  "Хоробрий лис": "Руда",
+-  "Мудрий вовк": "Бурко",
+-  "Казкова сова": "Зоря",
+-};
+-
+-const places = [
+-  { label: "казковий ліс", emoji: "🌲" },
+-  { label: "мрійливе озеро", emoji: "🏞️" },
+-  { label: "старовинний замок", emoji: "🏰" },
+-  { label: "хмарне місто", emoji: "☁️" },
+-  { label: "чудовий сад", emoji: "🌸" },
+-  { label: "місячна долина", emoji: "🌙" },
+-];
+-
+-const themes = [
+-  { label: "дружба", emoji: "🤝" },
+-  { label: "магія", emoji: "✨" },
+-  { label: "сміливість", emoji: "🛡️" },
+-  { label: "таємниці", emoji: "🕯️" },
+-  { label: "веселка", emoji: "🌈" },
+-  { label: "подорож", emoji: "🚀" },
+-];
+-
+-function OptionRow({
++// MVP-скоуп: 2 навички × 2 підтеми, 2 героя, 4 локації, 2 вікові режими.
++// Джерело контенту: /content (skills, characters, locations, age-adapters) —
++// UI-константи тут дублюють manifest.json для швидкого рендеру без файлового
++// I/O на клієнті; людські назви мають збігатися з content/manifest.json.
++const skills = [
++  {
++    key: "self_regulation",
++    label: "Саморегуляція",
++    emoji: "🌊",
++    subtopics: [
++      { key: "pause_before_action", label: "Пауза перед дією" },
++      { key: "waiting", label: "Очікування" },
++    ],
++  },
++  {
++    key: "relationships",
++    label: "Стосунки та взаємодія",
++    emoji: "🤝",
++    subtopics: [
++      { key: "propose_shared_play", label: "Спільна гра" },
++      { key: "resolve_disagreement", label: "Розв'язання суперечки" },
++    ],
++  },
++] as const;
++
++const characters = [
++  { key: "explorer", label: "Активний дослідник", emoji: "🦊", defaultName: "Іскра" },
++  { key: "observer", label: "Уважний спостерігач", emoji: "🦉", defaultName: "Зоря" },
++] as const;
++
++const locations = [
++  { key: "forest", label: "Ліс", emoji: "🌲" },
++  { key: "space", label: "Космос", emoji: "🚀" },
++  { key: "city", label: "Місто", emoji: "☁️" },
++  { key: "home", label: "Дім", emoji: "🏠" },
++] as const;
++
++const ageBands = [
++  { key: "3-5", label: "3–5 років" },
++  { key: "6-8", label: "6–8 років" },
++] as const;
++
++function OptionRow<T extends { key: string; label: string; emoji?: string }>({
+   title,
+   items,
+   selected,
+   onSelect,
+ }: {
+   title: string;
+-  items: { label: string; emoji: string }[];
++  items: readonly T[];
+   selected: string;
+   onSelect: (value: string) => void;
+ }) {
+@@ -55,19 +61,19 @@ function OptionRow({
+       <h2 className="font-lora text-xl font-semibold text-white">{title}</h2>
+       <div className="mt-4 flex flex-wrap gap-3">
+         {items.map((item) => {
+-          const active = selected === item.label;
++          const active = selected === item.key;
+           return (
+             <button
+-              key={item.label}
++              key={item.key}
+               type="button"
+-              onClick={() => onSelect(item.label)}
++              onClick={() => onSelect(item.key)}
+               className={`inline-flex items-center gap-2 rounded-2xl border px-4 py-3 text-left transition ${
+                 active
+                   ? "border-cyan-300/80 bg-cyan-400/10 text-cyan-100 shadow-[0_0_20px_rgba(14,165,233,0.25)]"
+                   : "border-white/10 bg-white/5 text-slate-200 hover:border-white/20 hover:bg-white/10"
+               }`}
+             >
+-              <span className="text-lg">{item.emoji}</span>
++              {item.emoji ? <span className="text-lg">{item.emoji}</span> : null}
+               <span className="font-nunito text-sm font-semibold">{item.label}</span>
+             </button>
+           );
+@@ -79,21 +85,48 @@ function OptionRow({
+ 
+ export default function CreatePage() {
+   const router = useRouter();
+-  const [selectedHero, setSelectedHero] = useState("");
+-  const [selectedHeroName, setSelectedHeroName] = useState("");
+-  const [selectedPlace, setSelectedPlace] = useState("");
+-  const [selectedTheme, setSelectedTheme] = useState("");
++  const [selectedSkill, setSelectedSkill] = useState<string>("");
++  const [selectedSubtopic, setSelectedSubtopic] = useState<string>("");
++  const [selectedCharacter, setSelectedCharacter] = useState<string>("");
++  const [selectedCharacterName, setSelectedCharacterName] = useState<string>("");
++  const [selectedLocation, setSelectedLocation] = useState<string>("");
++  const [selectedAgeBand, setSelectedAgeBand] = useState<string>("");
+ 
+-  const heroName = selectedHeroName.trim() || defaultHeroNames[selectedHero] || "";
+-  const canStart = selectedHero && selectedPlace && selectedTheme;
++  const currentSkill = skills.find((s) => s.key === selectedSkill);
++  const currentCharacter = characters.find((c) => c.key === selectedCharacter);
++
++  function onSelectSkill(key: string) {
++    setSelectedSkill(key);
++    setSelectedSubtopic(""); // підтема залежить від навички — скидаємо
++  }
++
++  const characterName = selectedCharacterName.trim() || currentCharacter?.defaultName || "";
++
++  const canStart = Boolean(
++    selectedSkill && selectedSubtopic && selectedCharacter && selectedLocation && selectedAgeBand,
++  );
+ 
+   const preview = useMemo(() => {
+-    if (!canStart) {
+-      return "Оберіть героя, місце та тему, щоб побачити, як розгорнеться казка.";
++    if (!canStart || !currentSkill || !currentCharacter) {
++      return "Оберіть навичку, героя, локацію та вік дитини, щоб побачити, як розгорнеться казка.";
+     }
++    const subtopicLabel = currentSkill.subtopics.find((s) => s.key === selectedSubtopic)?.label;
++    const locationLabel = locations.find((l) => l.key === selectedLocation)?.label;
++    return `У казці ${characterName} — ${currentCharacter.label.toLowerCase()}, потрапляє в ситуацію «${subtopicLabel}» у локації «${locationLabel}» (режим ${selectedAgeBand} років).`;
++  }, [canStart, currentSkill, currentCharacter, characterName, selectedSubtopic, selectedLocation, selectedAgeBand]);
+ 
+-    return `У казці ${heroName} — ${selectedHero}, який вирушає до ${selectedPlace}, де трапляється історія про ${selectedTheme}.`;
+-  }, [canStart, heroName, selectedHero, selectedPlace, selectedTheme]);
++  function handleStart() {
++    if (!canStart) return;
++    const query = new URLSearchParams({
++      skill: selectedSkill,
++      skillSubtopic: selectedSubtopic,
++      character: selectedCharacter,
++      characterName,
++      location: selectedLocation,
++      ageBand: selectedAgeBand,
++    });
++    router.push(`/story?${query.toString()}`);
++  }
+ 
+   return (
+     <div className="min-h-screen bg-background px-6 py-10 text-white">
+@@ -106,27 +139,40 @@ export default function CreatePage() {
+             Створи свою пригоду
+           </h1>
+           <p className="mt-3 max-w-2xl text-base leading-7 text-slate-300">
+-            Вибери героя, місце та тему. Потім розкажи історію, яка виросте з кожного вибору.
++            Оберіть навичку, яку казка допоможе обговорити з дитиною, героя, локацію та вік — історія виросте з кожного вибору дитини.
+           </p>
+         </div>
+ 
+-        <OptionRow title="Герой" items={heroes} selected={selectedHero} onSelect={setSelectedHero} />
++        <OptionRow title="Навичка" items={skills} selected={selectedSkill} onSelect={onSelectSkill} />
++
++        {currentSkill ? (
++          <OptionRow
++            title="Ситуація"
++            items={currentSkill.subtopics}
++            selected={selectedSubtopic}
++            onSelect={setSelectedSubtopic}
++          />
++        ) : null}
++
++        <OptionRow title="Герой" items={characters} selected={selectedCharacter} onSelect={setSelectedCharacter} />
++
+         <div className="rounded-3xl border border-white/10 bg-white/5 p-5 shadow-[0_0_60px_rgba(56,189,248,0.08)]">
+           <label className="font-nunito text-sm font-semibold text-slate-200">
+-            Як звати героя? Наприклад, Максим або Соня
++            Як звати героя? (необов'язково)
+           </label>
+           <input
+-            value={selectedHeroName}
+-            onChange={(event) => setSelectedHeroName(event.target.value)}
+-            placeholder="Як звати героя? Наприклад, Максим або Соня"
++            value={selectedCharacterName}
++            onChange={(event) => setSelectedCharacterName(event.target.value)}
++            placeholder={currentCharacter ? `Наприклад, ${currentCharacter.defaultName}` : "Як звати героя?"}
+             className="mt-3 w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none transition focus:border-cyan-300/80 focus:bg-white/10"
+           />
+           <p className="mt-3 text-sm text-slate-400">
+             Якщо поле порожнє, буде використано ім'я за замовчуванням для героя.
+           </p>
+         </div>
+-        <OptionRow title="Місце" items={places} selected={selectedPlace} onSelect={setSelectedPlace} />
+-        <OptionRow title="Тема" items={themes} selected={selectedTheme} onSelect={setSelectedTheme} />
++
++        <OptionRow title="Локація" items={locations} selected={selectedLocation} onSelect={setSelectedLocation} />
++        <OptionRow title="Вік дитини" items={ageBands} selected={selectedAgeBand} onSelect={setSelectedAgeBand} />
+ 
+         <div className="rounded-4xl border border-white/10 bg-white/5 p-8 shadow-[0_0_80px_rgba(59,130,246,0.14)]">
+           <h2 className="font-lora text-xl font-semibold text-white">Прев'ю казки</h2>
+@@ -134,13 +180,7 @@ export default function CreatePage() {
+           <button
+             type="button"
+             disabled={!canStart}
+-            onClick={() =>
+-              router.push(
+-                `/story?hero=${encodeURIComponent(selectedHero)}&heroName=${encodeURIComponent(
+-                  heroName,
+-                )}&place=${encodeURIComponent(selectedPlace)}&theme=${encodeURIComponent(selectedTheme)}`,
+-              )
+-            }
++            onClick={handleStart}
+             className={`mt-8 inline-flex items-center justify-center rounded-full px-8 py-4 text-base font-semibold transition ${
+               canStart
+                 ? "bg-linear-to-r from-violet-500 via-cyan-400 to-amber-400 text-background shadow-[0_0_30px_rgba(168,85,247,0.35)]"
+diff --git a/app/layout.tsx b/app/layout.tsx
+index 1eafe41..6ecb296 100644
+--- a/app/layout.tsx
++++ b/app/layout.tsx
+@@ -18,7 +18,7 @@ const nunito = Nunito({
+ 
+ export const metadata: Metadata = {
+   title: "Storyland",
+-  description: "Інтерактивна українська казка для дітей 6-8 років",
++  description: "Інтерактивна українська казка для дітей 3-8 років",
+ };
+ 
+ export default function RootLayout({
+diff --git a/app/page.tsx b/app/page.tsx
+index 39d666f..a08f816 100644
+--- a/app/page.tsx
++++ b/app/page.tsx
+@@ -23,7 +23,7 @@ export default function Home() {
+               Створити казку
+             </Link>
+             <Link
+-              href="/story?hero=Добрий%20дракон&place=казковий%20ліс&theme=дружба"
++              href="/story?skill=self_regulation&skillSubtopic=pause_before_action&character=explorer&characterName=Іскра&location=forest&ageBand=6-8"
+               className="inline-flex items-center justify-center rounded-full border border-white/20 bg-white/5 px-8 py-4 text-base font-semibold text-white transition hover:border-white/40"
+             >
+               Готова казка
+diff --git a/app/story/page.tsx b/app/story/page.tsx
+index fb6f1e7..4c24cf7 100644
+--- a/app/story/page.tsx
++++ b/app/story/page.tsx
+@@ -6,38 +6,60 @@ import { useRouter, useSearchParams } from "next/navigation";
+ const totalScenes = 4;
+ 
+ const locationImages: Record<string, string> = {
+-  "казковий ліс": "/locations/forest.svg",
+-  "мрійливе озеро": "/locations/underwater.svg",
+-  "старовинний замок": "/locations/castle.svg",
+-  "хмарне місто": "/locations/clouds.svg",
+-  "чудовий сад": "/locations/town.svg",
+-  "місячна долина": "/locations/stars.svg",
++  forest: "/locations/forest.svg",
++  space: "/locations/stars.svg",
++  city: "/locations/town.svg",
++  home: "/locations/castle.svg",
+ };
+ 
+-const defaultHeroNames: Record<string, string> = {
+-  "Добрий дракон": "Іскра",
+-  "Смілива феєчка": "Соня",
+-  "Мандрівний кіт": "Максим",
+-  "Хоробрий лис": "Руда",
+-  "Мудрий вовк": "Бурко",
+-  "Казкова сова": "Зоря",
++const locationLabels: Record<string, string> = {
++  forest: "ліс",
++  space: "космос",
++  city: "місто",
++  home: "дім",
++};
++
++const skillLabels: Record<string, string> = {
++  self_regulation: "саморегуляція",
++  relationships: "стосунки та взаємодія",
++};
++
++const defaultCharacterNames: Record<string, string> = {
++  explorer: "Іскра",
++  observer: "Зоря",
+ };
+ 
+ interface SceneContext {
+   scene: number;
+   scene_text: string;
+   choice_made: string;
++  used_maybe_phrase?: boolean;
++  used_etiquette?: boolean;
++}
++
++interface CaregiverSummary {
++  skill_name: string;
++  skill_in_plain_language: string;
++  why_it_matters: string;
++  try_today: string;
++  caregiver_phrase: string;
++  optional_extra_idea: string | null;
++  childhood_memory_prompt: string | null;
+ }
+ 
+-async function fetchScene(params: {
+-  theme: string;
+-  hero: string;
+-  heroName: string;
+-  place: string;
++interface StoryParams {
++  skill: string;
++  skillSubtopic: string;
++  character: string;
++  characterName: string;
++  location: string;
++  ageBand: string;
+   sceneContextHistory: SceneContext[];
+   scene: number;
+   totalScenes: number;
+-}) {
++}
++
++async function fetchScene(params: StoryParams) {
+   const response = await fetch("/api/story", {
+     method: "POST",
+     headers: { "Content-Type": "application/json" },
+@@ -51,35 +73,53 @@ async function fetchScene(params: {
+ function StoryPageClient() {
+   const router = useRouter();
+   const searchParams = useSearchParams();
+-  const hero = searchParams.get("hero") || "";
+-  const heroNameParam = searchParams.get("heroName") || "";
+-  const place = searchParams.get("place") || "";
+-  const theme = searchParams.get("theme") || "";
+-  const heroName = heroNameParam || defaultHeroNames[hero] || "Друг";
+-  const locationImage = locationImages[place] ?? "/locations/forest.svg";
++  const skill = searchParams.get("skill") || "";
++  const skillSubtopic = searchParams.get("skillSubtopic") || "";
++  const character = searchParams.get("character") || "";
++  const characterNameParam = searchParams.get("characterName") || "";
++  const location = searchParams.get("location") || "";
++  const ageBand = searchParams.get("ageBand") || "";
++  const characterName = characterNameParam || defaultCharacterNames[character] || "Друг";
++  const locationImage = locationImages[location] ?? "/locations/forest.svg";
+ 
+   const [scene, setScene] = useState<number>(1);
+   const [sceneContextHistory, setSceneContextHistory] = useState<SceneContext[]>([]);
+   const [sceneData, setSceneData] = useState<any>(null);
+   const [loading, setLoading] = useState(false);
+   const [error, setError] = useState("");
++  const [showCaregiverSummary, setShowCaregiverSummary] = useState(false);
+ 
+   // Pre-generated наступні сцени: ключ = "A" або "B"
+   const pregenRef = useRef<Record<string, Promise<any>>>({});
+ 
+-  const hasParams = Boolean(hero && place && theme);
++  const hasParams = Boolean(skill && skillSubtopic && character && location && ageBand);
+   const progressDots = useMemo(() => Array.from({ length: totalScenes }, (_, idx) => idx + 1), []);
+ 
++  function baseParams(nextHistory: SceneContext[], nextScene: number): StoryParams {
++    return {
++      skill,
++      skillSubtopic,
++      character,
++      characterName,
++      location,
++      ageBand,
++      sceneContextHistory: nextHistory,
++      scene: nextScene,
++      totalScenes,
++    };
++  }
++
+   useEffect(() => {
+     if (!hasParams) return;
+     setScene(1);
+     setSceneContextHistory([]);
+     setSceneData(null);
+     setError("");
++    setShowCaregiverSummary(false);
+     pregenRef.current = {};
+     loadScene(1, []);
+     // eslint-disable-next-line react-hooks/exhaustive-deps
+-  }, [hero, place, theme]);
++  }, [skill, skillSubtopic, character, location, ageBand]);
+ 
+   // Pre-generate наступну сцену поки дитина читає поточну
+   useEffect(() => {
+@@ -90,35 +130,37 @@ function StoryPageClient() {
+     // Не pre-generate якщо наступна — остання (фінал генерується після вибору)
+     if (nextSceneNum >= totalScenes) return;
+ 
+-    // Pre-generate для варіанту A
+-    pregenRef.current["A"] = fetchScene({
+-      theme, hero, heroName, place,
+-      sceneContextHistory: [
+-        ...sceneContextHistory,
+-        {
+-          scene,
+-          scene_text: sceneData.scene_text,
+-          choice_made: `A: ${sceneData.choice_a}`,
+-        },
+-      ],
+-      scene: nextSceneNum,
+-      totalScenes,
+-    });
+-
+-    // Pre-generate для варіанту B
+-    pregenRef.current["B"] = fetchScene({
+-      theme, hero, heroName, place,
+-      sceneContextHistory: [
+-        ...sceneContextHistory,
+-        {
+-          scene,
+-          scene_text: sceneData.scene_text,
+-          choice_made: `B: ${sceneData.choice_b}`,
+-        },
+-      ],
+-      scene: nextSceneNum,
+-      totalScenes,
+-    });
++    pregenRef.current["A"] = fetchScene(
++      baseParams(
++        [
++          ...sceneContextHistory,
++          {
++            scene,
++            scene_text: sceneData.scene_text,
++            choice_made: `A: ${sceneData.choice_a}`,
++            used_maybe_phrase: sceneData.used_maybe_phrase,
++            used_etiquette: sceneData.used_etiquette,
++          },
++        ],
++        nextSceneNum,
++      ),
++    );
++
++    pregenRef.current["B"] = fetchScene(
++      baseParams(
++        [
++          ...sceneContextHistory,
++          {
++            scene,
++            scene_text: sceneData.scene_text,
++            choice_made: `B: ${sceneData.choice_b}`,
++            used_maybe_phrase: sceneData.used_maybe_phrase,
++            used_etiquette: sceneData.used_etiquette,
++          },
++        ],
++        nextSceneNum,
++      ),
++    );
+     // eslint-disable-next-line react-hooks/exhaustive-deps
+   }, [sceneData]);
+ 
+@@ -126,12 +168,7 @@ function StoryPageClient() {
+     setLoading(true);
+     setError("");
+     try {
+-      const data = await fetchScene({
+-        theme, hero, heroName, place,
+-        sceneContextHistory: nextHistory,
+-        scene: nextScene,
+-        totalScenes,
+-      });
++      const data = await fetchScene(baseParams(nextHistory, nextScene));
+       setSceneData(data);
+     } catch (err) {
+       setError(err instanceof Error ? err.message : "Сталася помилка.");
+@@ -147,6 +184,8 @@ function StoryPageClient() {
+       scene,
+       scene_text: sceneData.scene_text,
+       choice_made: `${optionLabel}: ${optionText}`,
++      used_maybe_phrase: sceneData.used_maybe_phrase,
++      used_etiquette: sceneData.used_etiquette,
+     };
+     const nextHistory = [...sceneContextHistory, newContext];
+     const nextScene = scene + 1;
+@@ -161,28 +200,15 @@ function StoryPageClient() {
+       // Якщо наступна сцена — фінал, генеруємо напряму (не pre-generate)
+       if (nextScene >= totalScenes) {
+         pregenRef.current = {};
+-        const data = await fetchScene({
+-          theme, hero, heroName, place,
+-          sceneContextHistory: nextHistory,
+-          scene: nextScene,
+-          totalScenes,
+-        });
++        const data = await fetchScene(baseParams(nextHistory, nextScene));
+         setSceneData(data);
+         return;
+       }
+ 
+-      // Інакше — беремо pre-generated якщо є
+       const pregenPromise = pregenRef.current[optionLabel];
+       pregenRef.current = {};
+ 
+-      const data = pregenPromise
+-        ? await pregenPromise
+-        : await fetchScene({
+-            theme, hero, heroName, place,
+-            sceneContextHistory: nextHistory,
+-            scene: nextScene,
+-            totalScenes,
+-          });
++      const data = pregenPromise ? await pregenPromise : await fetchScene(baseParams(nextHistory, nextScene));
+ 
+       setSceneData(data);
+     } catch (err) {
+@@ -197,7 +223,7 @@ function StoryPageClient() {
+       <div className="min-h-screen bg-background px-6 py-10 text-white">
+         <div className="mx-auto max-w-3xl rounded-4xl border border-white/10 bg-white/5 p-10 text-center shadow-[0_0_80px_rgba(56,189,248,0.15)]">
+           <h1 className="font-lora text-4xl font-semibold">Оберіть параметри казки</h1>
+-          <p className="mt-4 text-slate-300">Щоб почати, поверніться на екран вибору та оберіть героя, місце та тему.</p>
++          <p className="mt-4 text-slate-300">Щоб почати, поверніться на екран вибору та оберіть навичку, героя, локацію та вік.</p>
+           <button
+             type="button"
+             onClick={() => router.push("/create")}
+@@ -210,6 +236,8 @@ function StoryPageClient() {
+     );
+   }
+ 
++  const caregiverSummary: CaregiverSummary | undefined = sceneData?.caregiver_summary;
++
+   return (
+     <div className="min-h-screen bg-background px-6 py-10 text-white">
+       <div className="mx-auto flex max-w-6xl flex-col gap-8">
+@@ -221,7 +249,7 @@ function StoryPageClient() {
+               <p className="font-nunito text-sm uppercase tracking-[0.35em] text-cyan-200/90">Прогрес</p>
+               <h1 className="mt-2 font-lora text-4xl font-semibold text-white">Чарівна історія</h1>
+               <p className="mt-3 max-w-2xl text-base leading-7 text-slate-300">
+-                Герой: {hero}, місце: {place}, тема: {theme}.
++                Герой: {characterName}, локація: {locationLabels[location] ?? location}, навичка: {skillLabels[skill] ?? skill}.
+               </p>
+             </div>
+             <div className="flex items-center gap-2">
+@@ -262,7 +290,7 @@ function StoryPageClient() {
+                 </p>
+                 <img
+                   src={locationImage}
+-                  alt={place}
++                  alt={locationLabels[location] ?? location}
+                   style={{
+                     width: "100%",
+                     height: "180px",
+@@ -278,28 +306,71 @@ function StoryPageClient() {
+                 </p>
+               </div>
+ 
+-              {/* Фінал — саммарі для батьків */}
++              {/* Фінал — дитячий фінал + окремий блок для батьків */}
+               {sceneData.ending ? (
+                 <div className="space-y-6">
+-                  <div className="rounded-3xl border border-white/10 bg-[#15122f] p-6">
+-                    <p className="font-lora text-xl font-semibold text-white">Ваша історія:</p>
+-                    <p className="mt-3 italic text-[#b0a8e0]">{sceneData.summary}</p>
+-                  </div>
+-                  <div className="rounded-3xl border border-white/10 bg-[#15122f] p-6">
+-                    <p className="font-lora text-xl font-semibold text-white">А якби...</p>
+-                    <p className="mt-3 text-sm text-[#6060a0]">{sceneData.alternative}</p>
+-                  </div>
+-                  <div className="rounded-3xl border border-[rgba(200,168,64,0.3)] bg-[#15122f] p-6">
+-                    <p className="font-lora text-xl font-semibold text-[#c8a840]">Запитайте у дитини:</p>
+-                    <p className="mt-3 text-base text-[#c8a840]">{sceneData.parent_prompt}</p>
+-                  </div>
+-                  <button
+-                    type="button"
+-                    onClick={() => router.push("/create")}
+-                    className="inline-flex items-center justify-center rounded-full bg-linear-to-r from-violet-500 via-cyan-400 to-amber-400 px-6 py-3 text-sm font-semibold text-background"
+-                  >
+-                    Почати нову казку
+-                  </button>
++                  {!showCaregiverSummary ? (
++                    <div className="flex flex-col gap-4 sm:flex-row">
++                      <button
++                        type="button"
++                        onClick={() => setShowCaregiverSummary(true)}
++                        className="inline-flex items-center justify-center rounded-full border border-[rgba(200,168,64,0.4)] bg-white/5 px-6 py-3 text-sm font-semibold text-[#c8a840] transition hover:bg-white/10"
++                      >
++                        Для батьків
++                      </button>
++                      <button
++                        type="button"
++                        onClick={() => router.push("/create")}
++                        className="inline-flex items-center justify-center rounded-full bg-linear-to-r from-violet-500 via-cyan-400 to-amber-400 px-6 py-3 text-sm font-semibold text-background"
++                      >
++                        Почати нову казку
++                      </button>
++                    </div>
++                  ) : (
++                    <>
++                      {caregiverSummary ? (
++                        <div className="rounded-3xl border border-white/10 bg-[#15122f] p-6">
++                          <p className="font-lora text-xl font-semibold text-white">{caregiverSummary.skill_name}</p>
++                          <p className="mt-3 text-sm text-slate-300">{caregiverSummary.skill_in_plain_language}</p>
++                          <p className="mt-3 text-sm text-slate-400">{caregiverSummary.why_it_matters}</p>
++                          <p className="mt-4 text-base text-cyan-100">
++                            <span className="font-semibold">Спробуйте сьогодні: </span>
++                            {caregiverSummary.try_today}
++                          </p>
++                          <p className="mt-3 rounded-2xl bg-white/5 p-3 text-sm italic text-slate-200">
++                            «{caregiverSummary.caregiver_phrase}»
++                          </p>
++                          {caregiverSummary.optional_extra_idea ? (
++                            <p className="mt-3 text-sm text-slate-400">{caregiverSummary.optional_extra_idea}</p>
++                          ) : null}
++                          {caregiverSummary.childhood_memory_prompt ? (
++                            <p className="mt-4 border-t border-white/10 pt-4 text-sm text-[#b0a8e0]">
++                              {caregiverSummary.childhood_memory_prompt}
++                            </p>
++                          ) : null}
++                        </div>
++                      ) : null}
++                      {sceneData.alternative ? (
++                        <div className="rounded-3xl border border-white/10 bg-[#15122f] p-6">
++                          <p className="font-lora text-xl font-semibold text-white">А якби...</p>
++                          <p className="mt-3 text-sm text-[#6060a0]">{sceneData.alternative}</p>
++                        </div>
++                      ) : null}
++                      {sceneData.parent_prompt ? (
++                        <div className="rounded-3xl border border-[rgba(200,168,64,0.3)] bg-[#15122f] p-6">
++                          <p className="font-lora text-xl font-semibold text-[#c8a840]">Запитайте у дитини:</p>
++                          <p className="mt-3 text-base text-[#c8a840]">{sceneData.parent_prompt}</p>
++                        </div>
++                      ) : null}
++                      <button
++                        type="button"
++                        onClick={() => router.push("/create")}
++                        className="inline-flex items-center justify-center rounded-full bg-linear-to-r from-violet-500 via-cyan-400 to-amber-400 px-6 py-3 text-sm font-semibold text-background"
++                      >
++                        Почати нову казку
++                      </button>
++                    </>
++                  )}
+                 </div>
+               ) : (
+                 /* Вибори */
+@@ -348,4 +419,4 @@ export default function StoryPage() {
+       <StoryPageClient />
+     </Suspense>
+   );
+-}
+\ No newline at end of file
++}
+diff --git a/content/age-adapters/age-3-5.md b/content/age-adapters/age-3-5.md
+new file mode 100644
+index 0000000..5d2a1f8
+--- /dev/null
++++ b/content/age-adapters/age-3-5.md
+@@ -0,0 +1,27 @@
++---
++id: narrative.age_adapter.3_5
++age_band: "3-5"
++version: 0.1
++source: Product and Learning Framework (Notion)
++last_reviewed_by: null
++---
++
++# Віковий адаптер 3–5 років
++
++**Тривалість:** 4–7 хв. **Обсяг:** 4–5 сцен. **Активні персонажі:** 2–3. **Вибори:** 2 (пригодницький і тематичний можуть об'єднуватись).
++
++Сюжетна мета одна, конкретна й видима: знайти, доставити, підготувати, зібрати, полагодити, перейти, запросити, завершити просту спільну дію.
++
++Перша сцена: герой у дії, знайомий контекст, сенсорний гачок, бажання, якір безпеки (зрозуміло де герой, хто поруч, до кого звернутись).
++
++Перешкода — один рівень причинності, наслідок одразу видимий (без довгого відкладення).
++
++**Емоційна модель:** одна основна емоція; інколи дві прості, якщо названі/показані через дуже зрозумілі тілесні сигнали. Без складних прихованих мотивів, іронії, читання думок.
++
++**Мова:** короткі речення; один смисловий крок у реченні; конкретні дієслова; повторювана фраза/ритм; обмежена к-сть нових слів; сенсорні деталі без перевантаження.
++
++Підтримка дорослого/помічника видима, але не забирає вибір. Другий шанс — у схожій, легко впізнаваній ситуації з нижчою напругою.
++
++Фінал: видиме завершення/безпечна зміна мети, конкретний прояв навички, відновлення контакту, повернення ранньої деталі, одне конкретне питання, одна проста офлайн-дія.
++
++**Заборонено:** складні приховані мотиви; тривала невизначеність; кілька часових ліній; моральна дилема без безпечного рішення; сарказм; необхідність самостійно здогадатись про складний емоційний стан.
+diff --git a/content/age-adapters/age-6-8.md b/content/age-adapters/age-6-8.md
+new file mode 100644
+index 0000000..e735310
+--- /dev/null
++++ b/content/age-adapters/age-6-8.md
+@@ -0,0 +1,31 @@
++---
++id: narrative.age_adapter.6_8
++age_band: "6-8"
++version: 0.1
++source: Product and Learning Framework (Notion)
++last_reviewed_by: null
++---
++
++# Віковий адаптер 6–8 років
++
++**Тривалість:** 7–10 хв. **Обсяг:** 6 сцен. **Активні персонажі:** 3–4. **Вибори:** 3 (пригодницький, тематично-контрастний, інтеграційний).
++
++Сюжетна мета може містити 1-2 проміжні кроки, неповну інформацію, необхідність узгодити різні ролі.
++
++Пригодницький вибір створює окремий `branch_token`, що обов'язково впливає на пізнішу сцену/фінал.
++
++Причинність: безпосередній + один відкладений наслідок. Дитина відновлює зв'язок між вибором і результатом без довгого пояснення автора.
++
++**Емоційна модель:** змішані почуття, різні перспективи, конфлікт двох зрозумілих потреб. Один варіант вибору корисний короткостроково, інший — довгостроково.
++
++**Мова:** складніші речення, гумор на основі характеру й ситуації, підтекст, коротке непорозуміння, ширший словник. Значення нового слова зрозуміле з контексту.
++
++Допомога доступна, але не директивна — дорослий ставить уточнювальне питання чи дає ресурс, не готову відповідь.
++
++Після наслідку — `discovery`: початкове припущення виявляється неповним, предмет має іншу функцію, інший персонаж називає свою перспективу.
++
++Другий шанс — в іншому поверхневому контексті: дитина переносить навичку, а не повторює щойно почуту репліку.
++
++Фінал: повний/частковий успіх, новий спільний план, прийнята відмова, або рішення повернутись пізніше.
++
++**Заборонено:** відповідальність, характерна для дорослого; складні етичні дилеми без контексту; психологічне маніпулювання; припущення, що дитина сама врегульовує небезпечну ситуацію.
+diff --git a/content/caregiver-summary/fallback-templates/relationships-3-5.json b/content/caregiver-summary/fallback-templates/relationships-3-5.json
+new file mode 100644
+index 0000000..913df0b
+--- /dev/null
++++ b/content/caregiver-summary/fallback-templates/relationships-3-5.json
+@@ -0,0 +1,14 @@
++{
++  "skill_name": "Стосунки та взаємодія",
++  "skill_in_plain_language": "Уміння запропонувати спільну гру і домовитись про просте правило разом з іншими.",
++  "why_it_matters": "Це допомагає дитині залишатись у грі з іншими дітьми, навіть коли хочеться різного.",
++  "try_today": "Запропонуйте разом придумати одне просте правило для спільної гри вдома.",
++  "caregiver_phrase": "Як ми можемо погратися так, щоб було цікаво всім?",
++  "optional_extra_idea": null,
++  "childhood_memory_prompt": "Чи пригадуєте гру, у яку любили грати в дитинстві з друзями?",
++  "age_band": "3-5",
++  "source_story_id": "fallback",
++  "source_skill_subtopic": "propose_shared_play",
++  "language": "uk",
++  "generation_version": "fallback-0.1"
++}
+diff --git a/content/caregiver-summary/fallback-templates/relationships-6-8.json b/content/caregiver-summary/fallback-templates/relationships-6-8.json
+new file mode 100644
+index 0000000..14c4482
+--- /dev/null
++++ b/content/caregiver-summary/fallback-templates/relationships-6-8.json
+@@ -0,0 +1,14 @@
++{
++  "skill_name": "Стосунки та взаємодія",
++  "skill_in_plain_language": "Уміння почути іншу потребу під час суперечки і разом знайти рішення без образи чи сили.",
++  "why_it_matters": "Це допомагає дитині відстоювати свою межу й водночас залишатися в контакті з друзями.",
++  "try_today": "Коли виникає суперечка, запитайте кожну сторону, що для неї найважливіше зберегти.",
++  "caregiver_phrase": "Що кожен із вас хоче зберегти в цій ситуації?",
++  "optional_extra_idea": "Можна разом придумати одне нове правило, яке врахує обидві потреби.",
++  "childhood_memory_prompt": "Чи була у вас в дитинстві суперечка з другом, яку вдалося владнати?",
++  "age_band": "6-8",
++  "source_story_id": "fallback",
++  "source_skill_subtopic": "resolve_disagreement",
++  "language": "uk",
++  "generation_version": "fallback-0.1"
++}
+diff --git a/content/caregiver-summary/fallback-templates/self-regulation-3-5.json b/content/caregiver-summary/fallback-templates/self-regulation-3-5.json
+new file mode 100644
+index 0000000..1804525
+--- /dev/null
++++ b/content/caregiver-summary/fallback-templates/self-regulation-3-5.json
+@@ -0,0 +1,14 @@
++{
++  "skill_name": "Саморегуляція",
++  "skill_in_plain_language": "Це вміння зробити коротку паузу, коли дуже хочеться щось негайно, і лише потім діяти.",
++  "why_it_matters": "Пауза допомагає легше переживати очікування й дрібні невдачі, не ховаючи свої почуття.",
++  "try_today": "У напруженій ситуації запропонуйте дитині зупинитися й обрати один із двох простих наступних кроків.",
++  "caregiver_phrase": "Хочеш зробити паузу, чи спробувати ще раз?",
++  "optional_extra_idea": null,
++  "childhood_memory_prompt": "Чи була у вас схожа ситуація в дитинстві?",
++  "age_band": "3-5",
++  "source_story_id": "fallback",
++  "source_skill_subtopic": "pause_before_action",
++  "language": "uk",
++  "generation_version": "fallback-0.1"
++}
+diff --git a/content/caregiver-summary/fallback-templates/self-regulation-6-8.json b/content/caregiver-summary/fallback-templates/self-regulation-6-8.json
+new file mode 100644
+index 0000000..7778be1
+--- /dev/null
++++ b/content/caregiver-summary/fallback-templates/self-regulation-6-8.json
+@@ -0,0 +1,14 @@
++{
++  "skill_name": "Саморегуляція",
++  "skill_in_plain_language": "Уміння помітити сильне бажання діяти негайно, зупинитися і свідомо обрати спосіб заспокоєння.",
++  "why_it_matters": "Це допомагає впоратися з розчаруванням після невдачі та легше переживати зміну планів.",
++  "try_today": "Коли дитина засмучена через невдачу, запитайте, який спосіб заспокоєння їй зараз підійде.",
++  "caregiver_phrase": "Що допоможе тобі зараз — пауза, допомога чи ще одна спроба?",
++  "optional_extra_idea": "Можна разом назвати два способи заспокоєння наперед, до напруженого моменту.",
++  "childhood_memory_prompt": "Пригадайте момент з дитинства, коли вам важко було чекати — чим це закінчилось?",
++  "age_band": "6-8",
++  "source_story_id": "fallback",
++  "source_skill_subtopic": "waiting",
++  "language": "uk",
++  "generation_version": "fallback-0.1"
++}
+diff --git a/content/caregiver-summary/spec.md b/content/caregiver-summary/spec.md
+new file mode 100644
+index 0000000..2cbf07d
+--- /dev/null
++++ b/content/caregiver-summary/spec.md
+@@ -0,0 +1,67 @@
++---
++id: caregiver_summary.spec
++version: 0.2
++source: Product and Learning Framework (Notion), розділ "Технічні параметри спрощеного батьківського резюме" + уточнення бачення 12.08.2026 (storyland_architecture_roadmap.md v3, розділ -1)
++last_reviewed_by: null
++---
++
++# Батьківське резюме — специфікація
++
++Коротке інформаційне вікно після завершення казки. Не оцінює дитину, не діагностує. Дитина спочатку бачить дитячий фінал; кнопка "Для батьків" відкриває резюме окремо й не перериває дитячий фінал. Основна дія: "Готово". Опційна: "Зберегти ідею".
++
++## Обов'язкові поля (з фреймворку, без змін)
++
++1. **skill_name** — до 45 символів.
++2. **skill_in_plain_language** — одне речення, 12-22 слова.
++3. **why_it_matters** — до двох речень, 20-35 слів.
++4. **try_today** — 15-35 слів, одна проста дія, без матеріалів/підготовки.
++5. **caregiver_phrase** — до 15 слів, готова фраза дослівно.
++6. **optional_extra_idea** — до 25 слів, тільки якщо справді відрізняється від основної.
++
++Загальний видимий текст: ~70-120 слів.
++
++## Нове опційне поле (уточнення бачення, 12.08.2026)
++
++7. **childhood_memory_prompt** (опційний, нове) — м'яке запрошення батькам згадати власну схожу історію з дитинства на цю тему. **Не завдання, не вимога розкривати особисте.** Формат: одне коротке речення-запрошення.
++   - Ліміт: до 20 слів.
++   - Приклад: «Чи була у вас схожа ситуація в дитинстві? Одна фраза — і розмова сама почнеться.»
++   - Дозволені дієслова: згадати, розповісти, поділитися (за бажанням). Заборонено: "розкажіть дитині", "поясніть", "навчіть" — це запрошення батькові для себе, не інструкція про дитину.
++   - Це поле реалізує продуктову мету "Storyland як місток для розмови батьків і дитини", а не тільки навчальний інструмент для дитини — див. `storyland_architecture_roadmap.md`, розділ -1.
++   - Валідація: якщо поле звучить як вимога/завдання/оцінка — `false` на кроці Final QA, поле повертається як `null`, а не переписується примусово.
++
++## Модель даних (JSON)
++
++```json
++{
++  "skill_name": "string",
++  "skill_in_plain_language": "string",
++  "why_it_matters": "string",
++  "try_today": "string",
++  "caregiver_phrase": "string",
++  "optional_extra_idea": "string | null",
++  "childhood_memory_prompt": "string | null",
++  "age_band": "3-5 | 6-8",
++  "source_story_id": "string",
++  "source_skill_subtopic": "string",
++  "language": "string",
++  "generation_version": "string"
++}
++```
++
++Текстові поля — без Markdown/HTML/емодзі/службових коментарів. Відсутнє поле — `null`, не порожній рядок.
++
++## Заборонені формулювання (BLOCK)
++
++«ваша дитина має труднощі»; «дитина не впоралася»; «потрібно виправити поведінку»; «перевірте, чи дитина емпатична»; «правильна відповідь»; «поганий вибір»; будь-які бали/рівні/відсотки/рейтинги/зірки/прогрес-бари/порівняння з віковою нормою; «опановано»/«не засвоєно».
++
++## Тон і словник
++
++Підтримувальний, конкретний, спокійний, ненав'язливий. Перевага словам: помітити, запитати, запропонувати, назвати, зупинитися, обрати, спробувати, домовитися, згадати, поділитися. Уникати: контролювати, виправляти, змушувати, тренувати до результату, оцінювати.
++
++## Автоматична валідація
++Структура: усі обов'язкові поля присутні; `age_band` допустимий; `optional_extra_idea`/`childhood_memory_prompt` — рядок або `null`; довжини в межах лімітів. Зміст: одна навичка; одна конкретна дія; `caregiver_phrase` придатна для дослівного використання; без матеріалів/спеціального часу. Безпека: без оцінки, діагностики, порівняння, примусу, сорому, моралізаторства, обіцянки результату.
++
++Резюме відхиляється й генерується повторно, якщо: більше двох порад; кілька навичок; понад 120 слів (без урахування `childhood_memory_prompt`); заняття довше 2 хв; звучить як домашнє завдання.
++
++## Резервний режим (fallback)
++Якщо генерація не пройшла валідацію після встановленої к-сті повторів — заздалегідь перевірений шаблон з `caregiver-summary/fallback-templates/` для відповідної (навичка × вік). `childhood_memory_prompt` у fallback — фіксований нейтральний варіант або `null`.
+diff --git a/content/characters/explorer.md b/content/characters/explorer.md
+new file mode 100644
+index 0000000..932e431
+--- /dev/null
++++ b/content/characters/explorer.md
+@@ -0,0 +1,26 @@
++---
++id: character.explorer
++character_key: explorer
++name: Активний дослідник
++mvp: true
++version: 0.1
++source: Product and Learning Framework (Notion)
++last_reviewed_by: null
++---
++
++# Паспорт героя: Активний дослідник (Герой А)
++
++**Базова риса:** ініціативність, енергійність.
++
++**Типова складність:** поспішає, перебиває, діє імпульсивно.
++
++**Спосіб навчання:** вчиться зупинятися, слухати й оцінювати наслідки.
++
++## Як це впливає на генерацію
++- Спосіб емоційної реакції: швидкий, фізично виражений (рух, вигук), а не прихований.
++- Словниковий стиль: короткі, енергійні репліки; багато дієслів дії.
++- Типова помилка: діє до того, як зібрав усю інформацію.
++- Спосіб застосування навички: найкраще підходить для підтем `pause_before_action` (Саморегуляція) — герой природно демонструє контраст «спершу — імпульс, потім — пауза».
++- Гумор: фізичний, ситуативний (спіткнувся, забіг не туди), не сарказм.
++
++> Це композиційний поведінково-навчальний профіль, не діагностичний психотип. Дитина може впізнавати себе в різних героях залежно від ситуації — не прив'язувати одну дитину до одного героя постійно.
+diff --git a/content/characters/observer.md b/content/characters/observer.md
+new file mode 100644
+index 0000000..34b343e
+--- /dev/null
++++ b/content/characters/observer.md
+@@ -0,0 +1,26 @@
++---
++id: character.observer
++character_key: observer
++name: Уважний спостерігач
++mvp: true
++version: 0.1
++source: Product and Learning Framework (Notion)
++last_reviewed_by: null
++---
++
++# Паспорт героя: Уважний спостерігач (Герой Б)
++
++**Базова риса:** чутливість, обережність.
++
++**Типова складність:** сумнівається, уникає нового, боїться помилитися.
++
++**Спосіб навчання:** вчиться називати потреби, просити підтримку і пробувати.
++
++## Як це впливає на генерацію
++- Спосіб емоційної реакції: стриманий, внутрішній; емоції показуються через тілесні сигнали й паузи, а не гучні репліки (див. `narrative-structure/hook-discovery-payoff.md` — «показувати, а не розповідати»).
++- Словниковий стиль: спостережливі описи, питання до себе й інших.
++- Типова помилка: мовчить про потребу замість того, щоб її назвати; уникає замість спроби.
++- Спосіб застосування навички: найкраще підходить для підтем `resolve_disagreement` і `waiting` — герой природно демонструє контраст «уникнення → назвати потребу і спробувати».
++- Гумор: м'який, спостережливий, не фізичний.
++
++> Це композиційний поведінково-навчальний профіль, не діагностичний психотип. Дитина може впізнавати себе в різних героях залежно від ситуації.
+diff --git a/content/locations/city.md b/content/locations/city.md
+new file mode 100644
+index 0000000..525a2de
+--- /dev/null
++++ b/content/locations/city.md
+@@ -0,0 +1,18 @@
++---
++id: location.city
++location_key: city
++name: Місто
++version: 0.1
++source: Product and Learning Framework (Notion)
++last_reviewed_by: null
++---
++
++# Локація: Місто
++
++**Типи ситуацій:** соціальні правила, нові знайомства, конфлікти, безпека.
++
++**Природні сюжетні ресурси:** майданчик, транспорт, бібліотека, фестиваль, магазин.
++
++**Safety anchor за замовчуванням:** знайомий дорослий чи впізнаваний дорослий-помічник (продавець, бібліотекар) доступний у межах сцени.
++
++Локація змінює обставини, предмети й ставки, але **не повинна змінювати зміст навички**.
+diff --git a/content/locations/forest.md b/content/locations/forest.md
+new file mode 100644
+index 0000000..3571c1d
+--- /dev/null
++++ b/content/locations/forest.md
+@@ -0,0 +1,18 @@
++---
++id: location.forest
++location_key: forest
++name: Ліс
++version: 0.1
++source: Product and Learning Framework (Notion)
++last_reviewed_by: null
++---
++
++# Локація: Ліс
++
++**Типи ситуацій:** невідомість, взаємодопомога, орієнтування, турбота про живе.
++
++**Природні сюжетні ресурси:** стежки, містки, тварини, погода, загублені речі.
++
++**Safety anchor за замовчуванням:** знайомий дорослий або надійний помічник (напр. досвідчений друг-провідник) залишається неподалік або доступний за покликом — ліс не повинен читатися як місце, де герой залишається сам без ресурсу (див. `safety/guardrails.md`, розділ про три якорі безпеки).
++
++Локація змінює обставини, предмети й ставки, але **не повинна змінювати зміст навички**.
+diff --git a/content/locations/home.md b/content/locations/home.md
+new file mode 100644
+index 0000000..977bdcb
+--- /dev/null
++++ b/content/locations/home.md
+@@ -0,0 +1,18 @@
++---
++id: location.home
++location_key: home
++name: Дім
++version: 0.1
++source: Product and Learning Framework (Notion)
++last_reviewed_by: null
++---
++
++# Локація: Дім
++
++**Типи ситуацій:** родинні стосунки, рутини, ревнощі, кордони, побутові рішення.
++
++**Природні сюжетні ресурси:** спільна гра, вечеря, гості, домашній улюбленець, підготовка до сну.
++
++**Safety anchor за замовчуванням:** значущий дорослий (батько/мати/опікун) присутній вдома або скоро повернеться — дім ніколи не читається як місце емоційної покинутості.
++
++Локація змінює обставини, предмети й ставки, але **не повинна змінювати зміст навички**.
+diff --git a/content/locations/space.md b/content/locations/space.md
+new file mode 100644
+index 0000000..772e594
+--- /dev/null
++++ b/content/locations/space.md
+@@ -0,0 +1,18 @@
++---
++id: location.space
++location_key: space
++name: Космос
++version: 0.1
++source: Product and Learning Framework (Notion)
++last_reviewed_by: null
++---
++
++# Локація: Космос
++
++**Типи ситуацій:** командна робота, відповідальність, очікування, розподіл ролей.
++
++**Природні сюжетні ресурси:** екіпаж, станція, обмежені ресурси, сигнал, невагомість.
++
++**Safety anchor за замовчуванням:** екіпаж/станція завжди на зв'язку; жодна ситуація не будується як «герой один і без зв'язку» (див. `safety/guardrails.md` — заборона надмірної відповідальності дитини за безпеку групи).
++
++Локація змінює обставини, предмети й ставки, але **не повинна змінювати зміст навички**.
+diff --git a/content/manifest.json b/content/manifest.json
+new file mode 100644
+index 0000000..17215d2
+--- /dev/null
++++ b/content/manifest.json
+@@ -0,0 +1,53 @@
++{
++  "version": "0.1",
++  "note": "Крок 1 (Варіант А, еволюційна міграція): контент-бібліотека для простого 2-кроквого циклу генерація+верифікація в app/api/story/route.ts. Повна 8-крокова pipeline і story_state — пізніший крок.",
++  "shared": {
++    "proseCraft": "content/prose-craft.md",
++    "safetyGuardrails": "content/safety-guardrails.md",
++    "caregiverSummarySpec": "content/caregiver-summary/spec.md"
++  },
++  "skills": {
++    "self_regulation": {
++      "name": "Саморегуляція",
++      "file": "content/skills/self-regulation.md",
++      "subtopics": ["pause_before_action", "waiting"]
++    },
++    "relationships": {
++      "name": "Стосунки та взаємодія",
++      "file": "content/skills/relationships.md",
++      "subtopics": ["propose_shared_play", "resolve_disagreement"]
++    }
++  },
++  "characters": {
++    "explorer": {
++      "name": "Активний дослідник",
++      "file": "content/characters/explorer.md",
++      "defaultName": "Іскра"
++    },
++    "observer": {
++      "name": "Уважний спостерігач",
++      "file": "content/characters/observer.md",
++      "defaultName": "Зоря"
++    }
++  },
++  "locations": {
++    "forest": { "name": "Ліс", "file": "content/locations/forest.md", "image": "/locations/forest.svg" },
++    "space": { "name": "Космос", "file": "content/locations/space.md", "image": "/locations/stars.svg" },
++    "city": { "name": "Місто", "file": "content/locations/city.md", "image": "/locations/town.svg" },
++    "home": { "name": "Дім", "file": "content/locations/home.md", "image": "/locations/castle.svg" }
++  },
++  "ageBands": {
++    "3-5": { "name": "3–5 років", "file": "content/age-adapters/age-3-5.md" },
++    "6-8": { "name": "6–8 років", "file": "content/age-adapters/age-6-8.md" }
++  },
++  "caregiverSummaryFallback": {
++    "self_regulation": {
++      "3-5": "content/caregiver-summary/fallback-templates/self-regulation-3-5.json",
++      "6-8": "content/caregiver-summary/fallback-templates/self-regulation-6-8.json"
++    },
++    "relationships": {
++      "3-5": "content/caregiver-summary/fallback-templates/relationships-3-5.json",
++      "6-8": "content/caregiver-summary/fallback-templates/relationships-6-8.json"
++    }
++  }
++}
+diff --git a/content/prose-craft.md b/content/prose-craft.md
+new file mode 100644
+index 0000000..7170399
+--- /dev/null
++++ b/content/prose-craft.md
+@@ -0,0 +1,118 @@
++---
++id: prose.craft
++version: 0.1
++source: >
++  Перенесено майже дослівно з попереднього SYSTEM_PROMPT app/api/story/route.js
++  (git-історія: 174759e, dcd4ac4, ff64339, 4e19b1e, 1526dd0, cf87492) — це
++  результат кількох ітерацій ручного тюнінгу якості тексту на живому проді,
++  зберігається без змін по суті при переході на нову архітектуру.
++last_reviewed_by: null
++---
++
++# Літературні прийоми та заборони
++
++АВТОРСЬКІ ОРІЄНТИРИ
++
++Основа — сучасна українська дитяча література:
++
++— Марія Артеменко, Настя Музиченко, Галина Ткачук («Іскорки суперсил»)
++  Живий діалог, гумор через конкретні ситуації, герої помиляються і це нормально,
++  навичка розкривається через подію а не через мораль, почуття через вчинки а не опис
++
++— Оксана Лущевська
++  Теми "бути чужим" і пошуку свого місця без дидактики, ніжність до складних тем,
++  герой знаходить себе через іншого а не через повчання
++
++Технічні прийоми з класики — використовуй як інструменти:
++
++— Василь Сухомлинський: один конкретний предмет або деталь несе всю емоцію сцени.
++  Шматочок крейди, стара лавка, зламана гілка — замість абзацу опису почуттів.
++
++— Астрід Ліндґрен: світ очима дитини де все більше і гостріше.
++  Тінь самотньої людини найдовша. Мовчання буває різним.
++  Кульмінація часто в тиші а не в події.
++
++ГОЛОВНЕ ПРАВИЛО КОЖНОЇ СЦЕНИ
++
++Знайди один конкретний момент — предмет, дію або репліку — навколо якого будується вся сцена.
++Не перелік подій. Один момент — розгорнутий повністю.
++
++Приклад сильного моменту: шматочок крейди який герой тримає і нікуди не йде.
++Приклад слабкого: герой пішов, побачив, вирішив, зробив — чотири події замість однієї.
++
++ДІАЛОГ
++
++Діалог — головний інструмент. Через репліки розкривається і характер, і почуття, і сюжет.
++Кожен персонаж говорить по-своєму — не всі однаково.
++Кількість реплік визначається ситуацією — не мінімумом.
++Іноді одна репліка і тиша після неї сильніша за п'ять.
++
++ПОЧУТТЯ — ТІЛЬКИ ЧЕРЕЗ ПОВЕДІНКУ
++
++Ніколи не пиши що герой відчуває — покажи що він робить.
++
++ЗАБОРОНЕНО назавжди:
++— "відчув як серце стиснулося / наповнилося теплом"
++— "стало тепло на душі / всередині"
++— "відчув що... / йому хотілося але..."
++— "сльози самі покотилися"
++— "справжній друг / справжня дружба" як висновок
++— Пряма мораль — дитина має відчути її сама
++— Незрозумілі поетичні метафори які треба пояснювати
++— Шаблонні дії розгубленості: дивитись під лапи потім на небо, крок вперед-назад, крила розправив-склав
++— Шаблон "подивився на X, потім на Y" як жест невпевненості або роздуму —
++  замість нього специфічна дія саме цього персонажа в цій ситуації
++— Фізично неможливі дії або образи: малюнок на землі не може "лежати між ними",
++  вітер не стирає крейду з каменя, герой не дивиться "на свої голки" без причини.
++  Кожна дія має витримувати перевірку: чи може дитина 5 років уявити це як картинку?
++— Репліки які потребують передісторії якої немає в казці:
++  якщо персонаж каже "я боявся що...", "я завжди...", "ніхто ніколи..." —
++  це має бути підготовлено попередніми сценами, а не з'явитись як фінальне одкровення
++
++ГУМОР
++
++З'являється коли органічно виникає з ситуації — не як обов'язковий елемент.
++Якщо є — простий і візуальний: дитина має одразу уявити картинку без пояснень.
++Якщо в цій сцені немає природного місця для гумору — його не має бути.
++
++ФІЗИЧНА ЛОГІКА
++
++Перед кожною дією, образом або метафорою — перевір:
++чи може дитина 5–8 років уявити це як конкретну картинку?
++
++Якщо дія виглядає дивно коли її уявляєш — вона не підходить.
++
++Приклади що не проходять перевірку:
++— "малюнок лежав між ними" (малюнок на землі не лежить — він намальований)
++— "вітер торкнувся малюнка — але крейда не стерлася" (крейда на камені від вітру не стирається — навіщо це писати?)
++— "їжак подивився на свої голки" (що він там побачив? яка реакція це розкриває?)
++
++Фізична точність — це не педантизм. Це довіра дитини до світу казки.
++Одна нелогічна деталь — і дитина виходить з історії.
++
++ЕТИКЕТ
++
++Знайомство, "можна я...", конкретна подяка, конкретне вибачення.
++Подяка і вибачення завжди конкретні: не "дякую" а "дякую що залишився коли я сказала що мене нема".
++З'являється один раз за казку — там де це природно.
++Не вставляй в кожну сцену.
++
++МАЙЖЕ-ФРАЗА
++
++Герой починає говорити автоматичну фразу — і зупиняється. Далі просто що зробив далі — без пояснень чому зупинився.
++
++Варіанти: "Нічого стра...", "Все бу...", "Та лад...", "Не переж...", "Я ж каза..."
++
++ВАЖЛИВО: максимум одна майже-фраза за всю казку — не в кожній сцені.
++Якщо в попередніх сценах вже була — в цій не має бути.
++Краще взагалі без неї ніж вставлена насильно.
++
++ДВОЇСТІСТЬ ПОЧУТТІВ
++
++Герой може хотіти одне і водночас боятись або соромитись.
++Покажи це через специфічну фізичну дію — таку що розкриває саме цього персонажа:
++— дракон який боїться — ховає хвіст за дерево і визирає з-за нього
++— кіт який соромиться — починає вмиватися посеред розмови
++— їжак який хвилюється — згортається і одразу розгортається
++
++Використовуй коли це органічно виникає з ситуації.
+diff --git a/content/safety-guardrails.md b/content/safety-guardrails.md
+new file mode 100644
+index 0000000..bbfe135
+--- /dev/null
++++ b/content/safety-guardrails.md
+@@ -0,0 +1,77 @@
++---
++id: safety.guardrails
++version: 0.1
++source: Product and Learning Framework (Notion), розділ "Психологічні та безпекові обмеження Storyland"
++last_reviewed_by: null
++status_legend:
++  BLOCK: "історія не може бути показана дитині й генерується повторно"
++  REVIEW: "потрібна ручна перевірка відповідальним редактором"
++  ALLOW: "елемент дозволений лише за зазначених умов"
++---
++
++# Safety guardrails
++
++Жодна загальна оцінка «загалом казка добра» не компенсує порушення правила BLOCK.
++
++## Межа емоційної інтенсивності
++
++**ALLOW** — дитина може хвилюватися: чи вдасться задум, чи знайдеться рішення, як персонажі домовляться, чи можна виправити локальну помилку, який із двох способів спрацює краще. Умови: проблема конкретна й зрозуміла; наслідок обмежений і потенційно виправний; герой не залишається без підтримки; після напруження — видиме емоційне відновлення.
++
++**BLOCK** — заборонено будувати сюжет на страху смерті/тяжкої травми, викрадення/переслідування, втрати дому, зникнення значущого дорослого, відмови дорослого від дитини, втрати любові/належності, війни/насильства/катастрофи, залишення дитини самої в неконтрольованому просторі, відповідальності дитини за життя/здоров'я/безпеку інших. Заборонені засоби штучної катастрофізації: сирени, панічний відлік часу, аварійні сигнали, різкі звуки, погоня, тривала темрява, фрази «усе залежить тільки від тебе».
++
++## Три обов'язкові якорі безпеки — BLOCK при відсутності
++
++1. **До ускладнення:** зрозуміло, де герой, із ким він і до кого може звернутися.
++2. **Під час ускладнення:** залишається хоча б один доступний ресурс — помічник, знайомий маршрут, засіб зв'язку, безпечне місце, посильний наступний крок.
++3. **Після ускладнення:** відновлюються не лише обставини, а й контакт, передбачуваність, відчуття безпеки.
++
++## Емоції і поведінка
++
++- **BLOCK:** називати емоцію неправильною/поганою; вимагати негайно перестати відчувати; карати за почуття; подавати саморегуляцію як придушення емоції. Обов'язкова логіка: почуття героя має значення; певна поведінка може потребувати зупинки/зміни.
++- **BLOCK:** прийняття емоції не виправдовує удари, приниження, псування, примус, погрози, порушення меж. Альтернатива — конкретна безпечна дія (зупинитися, відійти, назвати потребу, попросити допомоги).
++- **BLOCK:** висміювання, публічне приниження, ярлики («поганий», «егоїстичний», «боягуз»), порівняння з «кращими» дітьми, позбавлення любові як наслідок, примусова демонстрація каяття.
++
++## Відповідальність дитини
++
++- **ALLOW:** власний вибір; невелика частина спільної справи; спроба виправити локальний наслідок; повідомлення про проблему; звернення по допомогу.
++- **BLOCK:** дитина одноосібно відповідає за безпеку групи, емоційний стан дорослого, збереження родини, успіх усієї місії, порятунок світу, виправлення дорослого конфлікту.
++
++## Природні наслідки
++
++Кожен наслідок: безпосередньо пов'язаний із дією, пропорційний, локальний, зрозумілий, виправний, позбавлений приниження.
++
++**BLOCK:** покарання замасковане під наслідок; втрата любові/дому/належності/дружби; фізичний біль як навчальний інструмент; колективне покарання; необоротна втрата важливого об'єкта через одну помилку; непередбачуване різке посилення наслідку.
++
++## Значущі вибори
++
++Кожна точка вибору — два психологічно безпечні й реально доступні варіанти.
++
++**BLOCK:** очевидне добре/погане; безпечний проти небезпечного; правильна відповідь проти абсурдної; приховане покарання за дослідницький вибір; формулювання «ти помилився» / «неправильний вибір»; вибір як тест характеру дитини.
++
++**Обов'язковий критерій:** вибір змінює щонайменше один елемент — наступну дію, доступну інформацію, спосіб взаємодії, реакцію персонажа, предмет/маршрут, деталь для фіналу.
++
++## Навчальний компонент СЕН
++
++Одна казка навчає лише однієї центральної навички.
++
++**BLOCK:** лекція замість дії; готова мораль від оповідача; магічне зникнення проблеми після називання навички; вимога повторити «правильну» фразу; фінал, де дорослий усе вирішив; висновок про стабільну рису дитини на основі її вибору.
++
++## Допомога і роль дорослого
++
++Звернення по допомогу доступне до кризи, не подається як слабкість, не знижує самостійності героя. Дорослий забезпечує базову безпеку, не забирає весь вибір, не використовує страх/провину/любов як важіль.
++
++## Конфлікт обов'язковий — безпечність не означає його відсутність (BLOCK при порушенні)
++
++Кожна казка повинна містити посильну сюжетну проблему. Напруга підтримує цікавість «як герой це розв'яже?», а не страх «чи залишиться герой у безпеці». Не кожна історія має починатися з помилки героя — джерела конфлікту варто чергувати (різні потреби, неповна інформація, нова ситуація, невдалий план, випадковість), щоб не створювати враження, ніби будь-яка проблема виникає через неправильну поведінку дитини.
++
++**BLOCK:** проблема вирішується до дії героя; усі персонажі відразу погоджуються; дорослий одразу дає готове рішення; усі варіанти ведуть до однакового результату; навичка спрацьовує без труднощів чи другого шансу.
++
++## Розв'язка
++
++Після завершення має лишитися принаймні один результат: нове знання, нова домовленість, відновлений контакт, змінений план, створений/відремонтований предмет, новий безпечний спосіб взаємодії.
++
++## Інклюзивність — BLOCK
++
++Зв'язування негативної ролі з кольором шкіри, акцентом, інвалідністю, тілобудовою, статтю, сімейною структурою; представлення одного типу родини як єдино правильного; автоматичне призначення турботи жіночим персонажам, лідерства — чоловічим; інвалідність як покарання/страшний образ/метафора.
++
++Емоційний сигнал персонажа — підстава для гіпотези, не для впевненого читання думок. Правильний крок: помітити → припустити → уточнити.
+diff --git a/content/skills/relationships.md b/content/skills/relationships.md
+new file mode 100644
+index 0000000..45f821f
+--- /dev/null
++++ b/content/skills/relationships.md
+@@ -0,0 +1,55 @@
++---
++id: skill.relationships
++skill_key: relationships
++name: Стосунки та взаємодія
++mvp: true
++subtopics_validated_for_mvp:
++  - propose_shared_play
++  - resolve_disagreement
++version: 0.1
++source: Product and Learning Framework (Notion), розділ "Матриця історій для п'яти базових навичок СЕН"
++last_reviewed_by: null
++---
++
++# Навичка: Стосунки та взаємодія
++
++## Усі поведінкові підтеми навички
++запропонувати гру; домовитися про правила; розв'язати суперечку; попросити допомогу або сказати «ні»; відновити контакт.
++
++## Підтеми, валідовані для MVP
++- **propose_shared_play** — запропонувати спільну гру / домовитися про правила
++- **resolve_disagreement** — розв'язати суперечку без образи чи сили
++
++*(Інші підтеми: `ask_for_help_or_say_no`, `repair_contact` — поза MVP, залишені в резерві.)*
++
++## Центральна ситуація
++Двоє персонажів хочуть один ресурс, різні правила або різні ролі, але прагнуть залишитися у спільній діяльності.
++
++## Головне бажання героя
++Грати разом, зберегти важливу роль і водночас захистити власну потребу або межу.
++
++## Типовий неефективний спосіб дії
++Наказувати, перебивати, забирати, уникати розмови, погоджуватися всупереч собі або вимагати формального вибачення.
++
++## Природний наслідок
++Гра зупиняється, домовленість не працює, хтось виходить із взаємодії або контакт стає напруженим.
++
++## Альтернативна стратегія
++Сформулювати прохання; назвати межу; почути іншу потребу; запропонувати два варіанти; узгодити правило; відновити ситуацію конкретною дією.
++
++## Другий шанс
++Герої перезапускають гру або отримують новий спільний ресурс, де перевіряють домовленість.
++
++## Критерій фіналу (observable_skill_demonstration)
++Існує добровільна й зрозуміла домовленість, у якій враховані обидві сторони; контакт відновлений без примусового примирення (див. `safety/guardrails.md` — заборонено примусове примирення).
++
++## Питання для батьків (child_reflection_question)
++- Що кожен хотів зберегти?
++- Яке правило було справедливим?
++- Як можна сказати «ні» й залишитися в контакті?
++
++## Офлайн-місія (offline_family_activity)
++Разом придумати коротку гру з двома правилами, зіграти, а після першого раунду змінити одне правило за спільною згодою. Триває 1–5 хв, без матеріалів, добровільна.
++
++## Заборонені формулювання варіантів вибору
++Не «допомогти другові» / «образити друга» (очевидне добре/погане) — тільки психологічно правдоподібні альтернативні стратегії (напр. «одразу діяти так, як герой вважає правильним» vs «спочатку запитати друга, що йому потрібно»).
+diff --git a/content/skills/self-regulation.md b/content/skills/self-regulation.md
+new file mode 100644
+index 0000000..52fffbb
+--- /dev/null
++++ b/content/skills/self-regulation.md
+@@ -0,0 +1,55 @@
++---
++id: skill.self_regulation
++skill_key: self_regulation
++name: Саморегуляція
++mvp: true
++subtopics_validated_for_mvp:
++  - pause_before_action
++  - waiting
++version: 0.1
++source: Product and Learning Framework (Notion), розділ "Матриця історій для п'яти базових навичок СЕН"
++last_reviewed_by: null
++---
++
++# Навичка: Саморегуляція
++
++## Усі поведінкові підтеми навички
++пауза перед дією; очікування; розчарування; зміна плану; власний спосіб заспокоєння.
++
++## Підтеми, валідовані для MVP
++- **pause_before_action** — пауза перед імпульсивною дією
++- **waiting** — очікування / розчарування після невдачі
++
++*(Інші підтеми: `changing_plans`, `own_calming_method` — поза MVP, залишені в резерві для розширення.)*
++
++## Центральна ситуація
++Героєві потрібно чекати, повторити спробу або прийняти зміну плану, коли він дуже хоче негайного результату.
++
++## Головне бажання героя
++Швидко отримати результат або повернути події до очікуваного плану.
++
++## Типовий неефективний спосіб дії
++Поспішити, перебити чергу, схопити предмет, відмовитися після невдачі або вимагати повернути старий план.
++
++## Природний наслідок
++Процес збивається, потрібна повторна спроба, ресурс стає тимчасово недоступним, або інші не встигають долучитися.
++
++## Альтернативна стратегія
++Зробити паузу; назвати розчарування; обрати доступний спосіб заспокоєння; розділити очікування на короткі кроки; повернутися до дії.
++
++## Другий шанс
++Виникає коротше очікування, невелика перешкода або ще одна зміна, де герой може сам застосувати обрану стратегію.
++
++## Критерій фіналу (observable_skill_demonstration)
++Герой використовує хоча б один спосіб саморегуляції та повертається до справи; мета не обов'язково досягається ідеально.
++
++## Питання для батьків (child_reflection_question)
++- Що допомогло героєві зробити паузу?
++- Який спосіб заспокоєння підійшов саме йому?
++- Що допомагає чекати тобі?
++
++## Офлайн-місія (offline_family_activity)
++«Світлофор паузи» — один раз за день зупинитися, назвати почуття, обрати дію і потім перевірити, чи вона допомогла. Триває 1–5 хв, без матеріалів, добровільна (див. `safety/guardrails.md` розділ про офлайн-місії).
++
++## Заборонені формулювання варіантів вибору
++Не описувати вибір як «бути терплячим» / «повестися погано» — тільки як конкретну дію героя (див. `narrative-structure/choice-types.md`).
+diff --git a/lib/contentAssembler.ts b/lib/contentAssembler.ts
+new file mode 100644
+index 0000000..37f0019
+--- /dev/null
++++ b/lib/contentAssembler.ts
+@@ -0,0 +1,150 @@
++import fs from "node:fs";
++import path from "node:path";
++import matter from "gray-matter";
++
++/**
++ * Крок 1 контент-асемблера (Варіант А, еволюційна міграція).
++ *
++ * Читає /content/manifest.json і md-файли навичок/героїв/локацій/вікових
++ * адаптерів/safety, склеює їх у системний промпт для простого 2-кроквого
++ * циклу генерація+верифікація, який лишається в app/api/story/route.ts.
++ *
++ * Це НЕ повна 8-кроква pipeline з архітектурного документа — той рівень
++ * деталізації (окремі validator-кроки, story_state, acceptance checklist)
++ * заплановано на наступний крок міграції, коли буде підключено БД.
++ */
++
++const CONTENT_ROOT = process.cwd();
++
++type SkillKey = "self_regulation" | "relationships";
++type CharacterKey = "explorer" | "observer";
++type LocationKey = "forest" | "space" | "city" | "home";
++type AgeBand = "3-5" | "6-8";
++
++interface Manifest {
++  shared: { proseCraft: string; safetyGuardrails: string; caregiverSummarySpec: string };
++  skills: Record<SkillKey, { name: string; file: string; subtopics: string[] }>;
++  characters: Record<CharacterKey, { name: string; file: string; defaultName: string }>;
++  locations: Record<LocationKey, { name: string; file: string; image: string }>;
++  ageBands: Record<AgeBand, { name: string; file: string }>;
++  caregiverSummaryFallback: Record<SkillKey, Record<AgeBand, string>>;
++}
++
++let manifestCache: Manifest | null = null;
++const fileBodyCache = new Map<string, string>();
++const systemPromptCache = new Map<string, string>();
++
++export function loadManifest(): Manifest {
++  if (manifestCache) return manifestCache;
++  const raw = fs.readFileSync(path.join(CONTENT_ROOT, "content", "manifest.json"), "utf-8");
++  manifestCache = JSON.parse(raw) as Manifest;
++  return manifestCache;
++}
++
++function readMdBody(relPath: string): string {
++  const cached = fileBodyCache.get(relPath);
++  if (cached) return cached;
++  const raw = fs.readFileSync(path.join(CONTENT_ROOT, relPath), "utf-8");
++  const { content } = matter(raw);
++  const body = content.trim();
++  fileBodyCache.set(relPath, body);
++  return body;
++}
++
++export interface StoryParams {
++  skill: SkillKey;
++  skillSubtopic: string;
++  character: CharacterKey;
++  location: LocationKey;
++  ageBand: AgeBand;
++}
++
++export const VALID_SKILLS: SkillKey[] = ["self_regulation", "relationships"];
++export const VALID_CHARACTERS: CharacterKey[] = ["explorer", "observer"];
++export const VALID_LOCATIONS: LocationKey[] = ["forest", "space", "city", "home"];
++export const VALID_AGE_BANDS: AgeBand[] = ["3-5", "6-8"];
++
++export function isValidStoryParams(p: Partial<StoryParams>): p is StoryParams {
++  return (
++    !!p.skill && VALID_SKILLS.includes(p.skill as SkillKey) &&
++    !!p.character && VALID_CHARACTERS.includes(p.character as CharacterKey) &&
++    !!p.location && VALID_LOCATIONS.includes(p.location as LocationKey) &&
++    !!p.ageBand && VALID_AGE_BANDS.includes(p.ageBand as AgeBand) &&
++    typeof p.skillSubtopic === "string" && p.skillSubtopic.length > 0
++  );
++}
++
++/**
++ * Системний промпт для кроку генерації сцени: прозова майстерність
++ * (незмінна з попереднього SYSTEM_PROMPT) + навичка + герой + локація +
++ * віковий адаптер + скорочені safety-засади.
++ */
++export function assembleSceneSystemPrompt(params: StoryParams): string {
++  const key = `scene:${params.skill}:${params.character}:${params.location}:${params.ageBand}`;
++  const cached = systemPromptCache.get(key);
++  if (cached) return cached;
++
++  const manifest = loadManifest();
++  const skill = manifest.skills[params.skill];
++  const character = manifest.characters[params.character];
++  const location = manifest.locations[params.location];
++  const ageAdapter = manifest.ageBands[params.ageBand];
++
++  const parts = [
++    "Ти оповідач дитячих інтерактивних казок українською мовою.",
++    readMdBody(manifest.shared.proseCraft),
++    `# Навичка казки\n\n${readMdBody(skill.file)}`,
++    `# Паспорт героя\n\n${readMdBody(character.file)}`,
++    `# Локація\n\n${readMdBody(location.file)}`,
++    `# Віковий режим\n\n${readMdBody(ageAdapter.file)}`,
++    `# Safety-засади (обов'язкові обмеження)\n\n${readMdBody(manifest.shared.safetyGuardrails)}`,
++  ];
++
++  const prompt = parts.join("\n\n---\n\n");
++  systemPromptCache.set(key, prompt);
++  return prompt;
++}
++
++/** Системний промпт для фінальної сцени + caregiver_summary. */
++export function assembleFinalSystemPrompt(params: StoryParams): string {
++  const key = `final:${params.skill}:${params.character}:${params.ageBand}`;
++  const cached = systemPromptCache.get(key);
++  if (cached) return cached;
++
++  const manifest = loadManifest();
++  const skill = manifest.skills[params.skill];
++  const character = manifest.characters[params.character];
++  const ageAdapter = manifest.ageBands[params.ageBand];
++
++  const parts = [
++    "Ти оповідач дитячих інтерактивних казок українською мовою.",
++    readMdBody(manifest.shared.proseCraft),
++    `# Навичка казки\n\n${readMdBody(skill.file)}`,
++    `# Паспорт героя\n\n${readMdBody(character.file)}`,
++    `# Віковий режим\n\n${readMdBody(ageAdapter.file)}`,
++    `# Специфікація резюме для батьків (caregiver_summary)\n\n${readMdBody(manifest.shared.caregiverSummarySpec)}`,
++  ];
++
++  const prompt = parts.join("\n\n---\n\n");
++  systemPromptCache.set(key, prompt);
++  return prompt;
++}
++
++export function getSkillName(skill: SkillKey): string {
++  return loadManifest().skills[skill].name;
++}
++
++export function getCharacterInfo(character: CharacterKey) {
++  return loadManifest().characters[character];
++}
++
++export function getLocationInfo(location: LocationKey) {
++  return loadManifest().locations[location];
++}
++
++export function loadFallbackCaregiverSummary(skill: SkillKey, ageBand: AgeBand): Record<string, unknown> {
++  const manifest = loadManifest();
++  const relPath = manifest.caregiverSummaryFallback[skill][ageBand];
++  const raw = fs.readFileSync(path.join(CONTENT_ROOT, relPath), "utf-8");
++  return JSON.parse(raw);
++}
+diff --git a/package.json b/package.json
+index f8ae9b9..cd895a9 100644
+--- a/package.json
++++ b/package.json
+@@ -10,6 +10,7 @@
+   },
+   "dependencies": {
+     "@anthropic-ai/sdk": "^0.97.1",
++    "gray-matter": "^4.0.3",
+     "next": "16.2.6",
+     "react": "19.2.4",
+     "react-dom": "19.2.4"
+-- 
+2.43.0
+
