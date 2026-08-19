@@ -4,8 +4,6 @@ import { Suspense, useEffect, useMemo, useState, useRef } from "react";
 import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
 
-const totalScenes = 4;
-
 const locationImages: Record<string, string> = {
   forest: "/locations/forest.svg",
   space: "/locations/stars.svg",
@@ -34,6 +32,7 @@ interface SceneContext {
   scene: number;
   scene_text: string;
   choice_made: string;
+  scene_kind?: "choice" | "transition";
   choice_type?: string;
   chosen_option?: "A" | "B";
   chosen_choice_text?: string;
@@ -52,7 +51,7 @@ interface CaregiverSummary {
   childhood_memory_prompt: string | null;
 }
 
-interface StoryParams {
+interface StoryRequestParams {
   skill: string;
   skillSubtopic: string;
   character: string;
@@ -63,6 +62,8 @@ interface StoryParams {
   scene: number;
   totalScenes: number;
 }
+
+type StoryParams = StoryRequestParams;
 
 interface SceneData {
   scene_text: string;
@@ -75,6 +76,8 @@ interface SceneData {
   alternative?: string;
   parent_prompt?: string;
   caregiver_summary?: CaregiverSummary;
+  scene_kind?: "choice" | "transition";
+  total_scenes?: number;
 }
 
 async function fetchScene(params: StoryParams): Promise<SceneData> {
@@ -101,17 +104,18 @@ function StoryPageClient() {
   const locationImage = locationImages[location] ?? "/locations/forest.svg";
 
   const [scene, setScene] = useState<number>(1);
+  const [totalScenes, setTotalScenes] = useState<number>(0);
   const [sceneContextHistory, setSceneContextHistory] = useState<SceneContext[]>([]);
   const [sceneData, setSceneData] = useState<SceneData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [showCaregiverSummary, setShowCaregiverSummary] = useState(false);
 
-  // Pre-generated наступні сцени: ключ = "A" або "B"
+  // Pre-generated наступні сцени: "A"/"B" для choice-сцен, "NEXT" для transition
   const pregenRef = useRef<Record<string, Promise<SceneData>>>({});
 
   const hasParams = Boolean(skill && skillSubtopic && character && location && ageBand);
-  const progressDots = useMemo(() => Array.from({ length: totalScenes }, (_, idx) => idx + 1), []);
+  const progressDots = useMemo(() => Array.from({ length: totalScenes }, (_, idx) => idx + 1), [totalScenes]);
 
   function baseParams(nextHistory: SceneContext[], nextScene: number): StoryParams {
     return {
@@ -132,6 +136,7 @@ function StoryPageClient() {
     // URL-параметри визначають нову історію, тому стан потрібно скинути разом із нею.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setScene(1);
+    setTotalScenes(0);
     setSceneContextHistory([]);
     setSceneData(null);
     setError("");
@@ -141,14 +146,36 @@ function StoryPageClient() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [skill, skillSubtopic, character, location, ageBand]);
 
-  // Pre-generate наступну сцену поки дитина читає поточну
+  // Pre-generate наступну сцену(и) поки дитина читає поточну
   useEffect(() => {
     if (!sceneData || sceneData.ending) return;
 
     const nextSceneNum = scene + 1;
+    const knownTotal = sceneData.total_scenes ?? totalScenes;
 
-    // Не pre-generate якщо наступна — остання (фінал генерується після вибору)
-    if (nextSceneNum >= totalScenes) return;
+    // Не pre-generate якщо наступна — остання (фінал генерується після дії дитини)
+    if (!knownTotal || nextSceneNum >= knownTotal) return;
+
+    if (sceneData.scene_kind === "transition") {
+      // Перехідна сцена — лише одна можлива наступна сцена, без розгалуження
+      pregenRef.current["NEXT"] = fetchScene(
+        baseParams(
+          [
+            ...sceneContextHistory,
+            {
+              scene,
+              scene_text: sceneData.scene_text,
+              choice_made: "(продовження)",
+              scene_kind: "transition",
+              used_maybe_phrase: sceneData.used_maybe_phrase,
+              used_etiquette: sceneData.used_etiquette,
+            },
+          ],
+          nextSceneNum,
+        ),
+      );
+      return;
+    }
 
     pregenRef.current["A"] = fetchScene(
       baseParams(
@@ -158,6 +185,7 @@ function StoryPageClient() {
             scene,
             scene_text: sceneData.scene_text,
             choice_made: `A: ${sceneData.choice_a}`,
+            scene_kind: "choice",
             choice_type: sceneData.choice_type,
             chosen_option: "A",
             chosen_choice_text: sceneData.choice_a,
@@ -178,6 +206,7 @@ function StoryPageClient() {
             scene,
             scene_text: sceneData.scene_text,
             choice_made: `B: ${sceneData.choice_b}`,
+            scene_kind: "choice",
             choice_type: sceneData.choice_type,
             chosen_option: "B",
             chosen_choice_text: sceneData.choice_b,
@@ -192,12 +221,46 @@ function StoryPageClient() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sceneData]);
 
+  function applySceneResponse(data: SceneData) {
+    if (typeof data?.total_scenes === "number") setTotalScenes(data.total_scenes);
+    setSceneData(data);
+  }
+
   async function loadScene(nextScene: number, nextHistory: SceneContext[]) {
     setLoading(true);
     setError("");
     try {
       const data = await fetchScene(baseParams(nextHistory, nextScene));
-      setSceneData(data);
+      applySceneResponse(data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Сталася помилка.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function advance(nextHistory: SceneContext[], pregenKey: "A" | "B" | "NEXT") {
+    const nextScene = scene + 1;
+    setSceneContextHistory(nextHistory);
+    setScene(nextScene);
+    setSceneData(null);
+    setLoading(true);
+    setError("");
+
+    try {
+      // Якщо наступна сцена — фінал, генеруємо напряму (не pre-generate)
+      if (!totalScenes || nextScene >= totalScenes) {
+        pregenRef.current = {};
+        const data = await fetchScene(baseParams(nextHistory, nextScene));
+        applySceneResponse(data);
+        return;
+      }
+
+      const pregenPromise = pregenRef.current[pregenKey];
+      pregenRef.current = {};
+
+      const data = pregenPromise ? await pregenPromise : await fetchScene(baseParams(nextHistory, nextScene));
+      applySceneResponse(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Сталася помилка.");
     } finally {
@@ -212,6 +275,7 @@ function StoryPageClient() {
       scene,
       scene_text: sceneData.scene_text,
       choice_made: `${optionLabel}: ${optionText}`,
+      scene_kind: "choice",
       choice_type: sceneData.choice_type,
       chosen_option: optionLabel,
       chosen_choice_text: optionText,
@@ -219,35 +283,21 @@ function StoryPageClient() {
       used_maybe_phrase: sceneData.used_maybe_phrase,
       used_etiquette: sceneData.used_etiquette,
     };
-    const nextHistory = [...sceneContextHistory, newContext];
-    const nextScene = scene + 1;
+    await advance([...sceneContextHistory, newContext], optionLabel);
+  }
 
-    setSceneContextHistory(nextHistory);
-    setScene(nextScene);
-    setSceneData(null);
-    setLoading(true);
-    setError("");
+  async function handleContinue() {
+    if (!sceneData) return;
 
-    try {
-      // Якщо наступна сцена — фінал, генеруємо напряму (не pre-generate)
-      if (nextScene >= totalScenes) {
-        pregenRef.current = {};
-        const data = await fetchScene(baseParams(nextHistory, nextScene));
-        setSceneData(data);
-        return;
-      }
-
-      const pregenPromise = pregenRef.current[optionLabel];
-      pregenRef.current = {};
-
-      const data = pregenPromise ? await pregenPromise : await fetchScene(baseParams(nextHistory, nextScene));
-
-      setSceneData(data);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Сталася помилка.");
-    } finally {
-      setLoading(false);
-    }
+    const newContext: SceneContext = {
+      scene,
+      scene_text: sceneData.scene_text,
+      choice_made: "(продовження)",
+      scene_kind: "transition",
+      used_maybe_phrase: sceneData.used_maybe_phrase,
+      used_etiquette: sceneData.used_etiquette,
+    };
+    await advance([...sceneContextHistory, newContext], "NEXT");
   }
 
   if (!hasParams) {
@@ -269,6 +319,8 @@ function StoryPageClient() {
   }
 
   const caregiverSummary: CaregiverSummary | undefined = sceneData?.caregiver_summary;
+  const isChoiceScene = Boolean(sceneData && !sceneData.ending && sceneData.scene_kind !== "transition");
+  const isTransitionScene = Boolean(sceneData && !sceneData.ending && sceneData.scene_kind === "transition");
 
   return (
     <div className="min-h-screen bg-background px-6 py-10 text-white">
@@ -406,7 +458,18 @@ function StoryPageClient() {
                     </>
                   )}
                 </div>
-              ) : (
+              ) : isTransitionScene ? (
+                /* Перехідна сцена — без розгалуження, просто "Далі" */
+                <div className="flex justify-center">
+                  <button
+                    type="button"
+                    onClick={handleContinue}
+                    className="inline-flex items-center justify-center rounded-full bg-linear-to-r from-violet-500 via-cyan-400 to-amber-400 px-8 py-4 text-base font-semibold text-background"
+                  >
+                    Далі
+                  </button>
+                </div>
+              ) : isChoiceScene ? (
                 /* Вибори */
                 <div className="grid gap-4 sm:grid-cols-2">
                   <button
@@ -426,7 +489,7 @@ function StoryPageClient() {
                     <p className="mt-3 text-base leading-7 text-slate-100">{sceneData.choice_b}</p>
                   </button>
                 </div>
-              )}
+              ) : null}
             </div>
           ) : (
             <div className="flex min-h-60 items-center justify-center text-lg text-slate-200">

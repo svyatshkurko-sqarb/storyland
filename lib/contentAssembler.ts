@@ -22,7 +22,7 @@ type LocationKey = "forest" | "space" | "city" | "home";
 type AgeBand = "3-5" | "6-8";
 
 interface Manifest {
-  shared: { proseCraft: string; safetyGuardrails: string; caregiverSummarySpec: string };
+  shared: { proseCraft: string; safetyGuardrails: string; caregiverSummarySpec: string; choiceTypes: string };
   skills: Record<SkillKey, { name: string; file: string; subtopics: string[] }>;
   characters: Record<CharacterKey, { name: string; file: string; defaultName: string }>;
   locations: Record<LocationKey, { name: string; file: string; image: string }>;
@@ -97,6 +97,7 @@ export function assembleSceneSystemPrompt(params: StoryParams): string {
     `# Паспорт героя\n\n${readMdBody(character.file)}`,
     `# Локація\n\n${readMdBody(location.file)}`,
     `# Віковий режим\n\n${readMdBody(ageAdapter.file)}`,
+    `# Типи виборів\n\n${readMdBody(manifest.shared.choiceTypes)}`,
     `# Safety-засади (обов'язкові обмеження)\n\n${readMdBody(manifest.shared.safetyGuardrails)}`,
   ];
 
