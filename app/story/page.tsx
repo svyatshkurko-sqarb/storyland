@@ -1,6 +1,7 @@
 "use client";
 
 import { Suspense, useEffect, useMemo, useState, useRef } from "react";
+import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
 
 const totalScenes = 4;
@@ -59,7 +60,20 @@ interface StoryParams {
   totalScenes: number;
 }
 
-async function fetchScene(params: StoryParams) {
+interface SceneData {
+  scene_text: string;
+  choice_a: string;
+  choice_b: string;
+  choice_type?: string;
+  used_maybe_phrase?: boolean;
+  used_etiquette?: boolean;
+  ending?: string;
+  alternative?: string;
+  parent_prompt?: string;
+  caregiver_summary?: CaregiverSummary;
+}
+
+async function fetchScene(params: StoryParams): Promise<SceneData> {
   const response = await fetch("/api/story", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -84,13 +98,13 @@ function StoryPageClient() {
 
   const [scene, setScene] = useState<number>(1);
   const [sceneContextHistory, setSceneContextHistory] = useState<SceneContext[]>([]);
-  const [sceneData, setSceneData] = useState<any>(null);
+  const [sceneData, setSceneData] = useState<SceneData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [showCaregiverSummary, setShowCaregiverSummary] = useState(false);
 
   // Pre-generated наступні сцени: ключ = "A" або "B"
-  const pregenRef = useRef<Record<string, Promise<any>>>({});
+  const pregenRef = useRef<Record<string, Promise<SceneData>>>({});
 
   const hasParams = Boolean(skill && skillSubtopic && character && location && ageBand);
   const progressDots = useMemo(() => Array.from({ length: totalScenes }, (_, idx) => idx + 1), []);
@@ -111,6 +125,8 @@ function StoryPageClient() {
 
   useEffect(() => {
     if (!hasParams) return;
+    // URL-параметри визначають нову історію, тому стан потрібно скинути разом із нею.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setScene(1);
     setSceneContextHistory([]);
     setSceneData(null);
@@ -288,9 +304,11 @@ function StoryPageClient() {
                 <p className="font-lora text-2xl leading-9 text-slate-100">
                   {sceneData.ending ? "Кінець казки" : `Сцена ${scene}`}
                 </p>
-                <img
+                <Image
                   src={locationImage}
                   alt={locationLabels[location] ?? location}
+                  width={680}
+                  height={180}
                   style={{
                     width: "100%",
                     height: "180px",

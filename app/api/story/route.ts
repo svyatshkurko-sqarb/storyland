@@ -81,8 +81,6 @@ function buildVerificationPrompt({
   choice_type,
   skillSubtopic,
   historyText,
-  usedMaybePhrase,
-  usedEtiquette,
 }: {
   scene_text: string;
   choice_a: string;
@@ -90,8 +88,6 @@ function buildVerificationPrompt({
   choice_type: string;
   skillSubtopic: string;
   historyText: string;
-  usedMaybePhrase: boolean;
-  usedEtiquette: boolean;
 }) {
   return `Перевір цю сцену дитячої казки. Відповідай тільки JSON.
 
@@ -323,8 +319,6 @@ export async function POST(request: Request) {
             choice_type: sceneData.choice_type,
             skillSubtopic: params.skillSubtopic,
             historyText,
-            usedMaybePhrase,
-            usedEtiquette,
           }),
           maxTokens: 512,
         });

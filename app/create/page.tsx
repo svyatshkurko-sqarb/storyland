@@ -7,6 +7,13 @@ import { useRouter } from "next/navigation";
 // Джерело контенту: /content (skills, characters, locations, age-adapters) —
 // UI-константи тут дублюють manifest.json для швидкого рендеру без файлового
 // I/O на клієнті; людські назви мають збігатися з content/manifest.json.
+type Skill = {
+  key: string;
+  label: string;
+  emoji: string;
+  subtopics: readonly { key: string; label: string }[];
+};
+
 const skills = [
   {
     key: "self_regulation",
@@ -26,7 +33,7 @@ const skills = [
       { key: "resolve_disagreement", label: "Розв'язання суперечки" },
     ],
   },
-] as const;
+] satisfies readonly Skill[];
 
 const characters = [
   { key: "explorer", label: "Активний дослідник", emoji: "🦊", defaultName: "Іскра" },
@@ -158,7 +165,7 @@ export default function CreatePage() {
 
         <div className="rounded-3xl border border-white/10 bg-white/5 p-5 shadow-[0_0_60px_rgba(56,189,248,0.08)]">
           <label className="font-nunito text-sm font-semibold text-slate-200">
-            Як звати героя? (необов'язково)
+            Як звати героя? (необов&apos;язково)
           </label>
           <input
             value={selectedCharacterName}
@@ -167,7 +174,7 @@ export default function CreatePage() {
             className="mt-3 w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none transition focus:border-cyan-300/80 focus:bg-white/10"
           />
           <p className="mt-3 text-sm text-slate-400">
-            Якщо поле порожнє, буде використано ім'я за замовчуванням для героя.
+            Якщо поле порожнє, буде використано ім&apos;я за замовчуванням для героя.
           </p>
         </div>
 
@@ -175,7 +182,7 @@ export default function CreatePage() {
         <OptionRow title="Вік дитини" items={ageBands} selected={selectedAgeBand} onSelect={setSelectedAgeBand} />
 
         <div className="rounded-4xl border border-white/10 bg-white/5 p-8 shadow-[0_0_80px_rgba(59,130,246,0.14)]">
-          <h2 className="font-lora text-xl font-semibold text-white">Прев'ю казки</h2>
+          <h2 className="font-lora text-xl font-semibold text-white">Прев&apos;ю казки</h2>
           <p className="mt-4 max-w-3xl text-base leading-7 text-slate-200">{preview}</p>
           <button
             type="button"
