@@ -18,7 +18,7 @@ const nunito = Nunito({
 
 export const metadata: Metadata = {
   title: "Storyland",
-  description: "Інтерактивна українська казка для дітей 6-8 років",
+  description: "Інтерактивна українська казка для дітей 3-8 років",
 };
 
 export default function RootLayout({

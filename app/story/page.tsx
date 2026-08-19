@@ -1,43 +1,79 @@
 "use client";
 
 import { Suspense, useEffect, useMemo, useState, useRef } from "react";
+import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
 
 const totalScenes = 4;
 
 const locationImages: Record<string, string> = {
-  "казковий ліс": "/locations/forest.svg",
-  "мрійливе озеро": "/locations/underwater.svg",
-  "старовинний замок": "/locations/castle.svg",
-  "хмарне місто": "/locations/clouds.svg",
-  "чудовий сад": "/locations/town.svg",
-  "місячна долина": "/locations/stars.svg",
+  forest: "/locations/forest.svg",
+  space: "/locations/stars.svg",
+  city: "/locations/town.svg",
+  home: "/locations/castle.svg",
 };
 
-const defaultHeroNames: Record<string, string> = {
-  "Добрий дракон": "Іскра",
-  "Смілива феєчка": "Соня",
-  "Мандрівний кіт": "Максим",
-  "Хоробрий лис": "Руда",
-  "Мудрий вовк": "Бурко",
-  "Казкова сова": "Зоря",
+const locationLabels: Record<string, string> = {
+  forest: "ліс",
+  space: "космос",
+  city: "місто",
+  home: "дім",
+};
+
+const skillLabels: Record<string, string> = {
+  self_regulation: "саморегуляція",
+  relationships: "стосунки та взаємодія",
+};
+
+const defaultCharacterNames: Record<string, string> = {
+  explorer: "Іскра",
+  observer: "Зоря",
 };
 
 interface SceneContext {
   scene: number;
   scene_text: string;
   choice_made: string;
+  used_maybe_phrase?: boolean;
+  used_etiquette?: boolean;
 }
 
-async function fetchScene(params: {
-  theme: string;
-  hero: string;
-  heroName: string;
-  place: string;
+interface CaregiverSummary {
+  skill_name: string;
+  skill_in_plain_language: string;
+  why_it_matters: string;
+  try_today: string;
+  caregiver_phrase: string;
+  optional_extra_idea: string | null;
+  childhood_memory_prompt: string | null;
+}
+
+interface StoryParams {
+  skill: string;
+  skillSubtopic: string;
+  character: string;
+  characterName: string;
+  location: string;
+  ageBand: string;
   sceneContextHistory: SceneContext[];
   scene: number;
   totalScenes: number;
-}) {
+}
+
+interface SceneData {
+  scene_text: string;
+  choice_a: string;
+  choice_b: string;
+  choice_type?: string;
+  used_maybe_phrase?: boolean;
+  used_etiquette?: boolean;
+  ending?: string;
+  alternative?: string;
+  parent_prompt?: string;
+  caregiver_summary?: CaregiverSummary;
+}
+
+async function fetchScene(params: StoryParams): Promise<SceneData> {
   const response = await fetch("/api/story", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -51,35 +87,55 @@ async function fetchScene(params: {
 function StoryPageClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const hero = searchParams.get("hero") || "";
-  const heroNameParam = searchParams.get("heroName") || "";
-  const place = searchParams.get("place") || "";
-  const theme = searchParams.get("theme") || "";
-  const heroName = heroNameParam || defaultHeroNames[hero] || "Друг";
-  const locationImage = locationImages[place] ?? "/locations/forest.svg";
+  const skill = searchParams.get("skill") || "";
+  const skillSubtopic = searchParams.get("skillSubtopic") || "";
+  const character = searchParams.get("character") || "";
+  const characterNameParam = searchParams.get("characterName") || "";
+  const location = searchParams.get("location") || "";
+  const ageBand = searchParams.get("ageBand") || "";
+  const characterName = characterNameParam || defaultCharacterNames[character] || "Друг";
+  const locationImage = locationImages[location] ?? "/locations/forest.svg";
 
   const [scene, setScene] = useState<number>(1);
   const [sceneContextHistory, setSceneContextHistory] = useState<SceneContext[]>([]);
-  const [sceneData, setSceneData] = useState<any>(null);
+  const [sceneData, setSceneData] = useState<SceneData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [showCaregiverSummary, setShowCaregiverSummary] = useState(false);
 
   // Pre-generated наступні сцени: ключ = "A" або "B"
-  const pregenRef = useRef<Record<string, Promise<any>>>({});
+  const pregenRef = useRef<Record<string, Promise<SceneData>>>({});
 
-  const hasParams = Boolean(hero && place && theme);
+  const hasParams = Boolean(skill && skillSubtopic && character && location && ageBand);
   const progressDots = useMemo(() => Array.from({ length: totalScenes }, (_, idx) => idx + 1), []);
+
+  function baseParams(nextHistory: SceneContext[], nextScene: number): StoryParams {
+    return {
+      skill,
+      skillSubtopic,
+      character,
+      characterName,
+      location,
+      ageBand,
+      sceneContextHistory: nextHistory,
+      scene: nextScene,
+      totalScenes,
+    };
+  }
 
   useEffect(() => {
     if (!hasParams) return;
+    // URL-параметри визначають нову історію, тому стан потрібно скинути разом із нею.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setScene(1);
     setSceneContextHistory([]);
     setSceneData(null);
     setError("");
+    setShowCaregiverSummary(false);
     pregenRef.current = {};
     loadScene(1, []);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hero, place, theme]);
+  }, [skill, skillSubtopic, character, location, ageBand]);
 
   // Pre-generate наступну сцену поки дитина читає поточну
   useEffect(() => {
@@ -90,35 +146,37 @@ function StoryPageClient() {
     // Не pre-generate якщо наступна — остання (фінал генерується після вибору)
     if (nextSceneNum >= totalScenes) return;
 
-    // Pre-generate для варіанту A
-    pregenRef.current["A"] = fetchScene({
-      theme, hero, heroName, place,
-      sceneContextHistory: [
-        ...sceneContextHistory,
-        {
-          scene,
-          scene_text: sceneData.scene_text,
-          choice_made: `A: ${sceneData.choice_a}`,
-        },
-      ],
-      scene: nextSceneNum,
-      totalScenes,
-    });
+    pregenRef.current["A"] = fetchScene(
+      baseParams(
+        [
+          ...sceneContextHistory,
+          {
+            scene,
+            scene_text: sceneData.scene_text,
+            choice_made: `A: ${sceneData.choice_a}`,
+            used_maybe_phrase: sceneData.used_maybe_phrase,
+            used_etiquette: sceneData.used_etiquette,
+          },
+        ],
+        nextSceneNum,
+      ),
+    );
 
-    // Pre-generate для варіанту B
-    pregenRef.current["B"] = fetchScene({
-      theme, hero, heroName, place,
-      sceneContextHistory: [
-        ...sceneContextHistory,
-        {
-          scene,
-          scene_text: sceneData.scene_text,
-          choice_made: `B: ${sceneData.choice_b}`,
-        },
-      ],
-      scene: nextSceneNum,
-      totalScenes,
-    });
+    pregenRef.current["B"] = fetchScene(
+      baseParams(
+        [
+          ...sceneContextHistory,
+          {
+            scene,
+            scene_text: sceneData.scene_text,
+            choice_made: `B: ${sceneData.choice_b}`,
+            used_maybe_phrase: sceneData.used_maybe_phrase,
+            used_etiquette: sceneData.used_etiquette,
+          },
+        ],
+        nextSceneNum,
+      ),
+    );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sceneData]);
 
@@ -126,12 +184,7 @@ function StoryPageClient() {
     setLoading(true);
     setError("");
     try {
-      const data = await fetchScene({
-        theme, hero, heroName, place,
-        sceneContextHistory: nextHistory,
-        scene: nextScene,
-        totalScenes,
-      });
+      const data = await fetchScene(baseParams(nextHistory, nextScene));
       setSceneData(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Сталася помилка.");
@@ -147,6 +200,8 @@ function StoryPageClient() {
       scene,
       scene_text: sceneData.scene_text,
       choice_made: `${optionLabel}: ${optionText}`,
+      used_maybe_phrase: sceneData.used_maybe_phrase,
+      used_etiquette: sceneData.used_etiquette,
     };
     const nextHistory = [...sceneContextHistory, newContext];
     const nextScene = scene + 1;
@@ -161,28 +216,15 @@ function StoryPageClient() {
       // Якщо наступна сцена — фінал, генеруємо напряму (не pre-generate)
       if (nextScene >= totalScenes) {
         pregenRef.current = {};
-        const data = await fetchScene({
-          theme, hero, heroName, place,
-          sceneContextHistory: nextHistory,
-          scene: nextScene,
-          totalScenes,
-        });
+        const data = await fetchScene(baseParams(nextHistory, nextScene));
         setSceneData(data);
         return;
       }
 
-      // Інакше — беремо pre-generated якщо є
       const pregenPromise = pregenRef.current[optionLabel];
       pregenRef.current = {};
 
-      const data = pregenPromise
-        ? await pregenPromise
-        : await fetchScene({
-            theme, hero, heroName, place,
-            sceneContextHistory: nextHistory,
-            scene: nextScene,
-            totalScenes,
-          });
+      const data = pregenPromise ? await pregenPromise : await fetchScene(baseParams(nextHistory, nextScene));
 
       setSceneData(data);
     } catch (err) {
@@ -197,7 +239,7 @@ function StoryPageClient() {
       <div className="min-h-screen bg-background px-6 py-10 text-white">
         <div className="mx-auto max-w-3xl rounded-4xl border border-white/10 bg-white/5 p-10 text-center shadow-[0_0_80px_rgba(56,189,248,0.15)]">
           <h1 className="font-lora text-4xl font-semibold">Оберіть параметри казки</h1>
-          <p className="mt-4 text-slate-300">Щоб почати, поверніться на екран вибору та оберіть героя, місце та тему.</p>
+          <p className="mt-4 text-slate-300">Щоб почати, поверніться на екран вибору та оберіть навичку, героя, локацію та вік.</p>
           <button
             type="button"
             onClick={() => router.push("/create")}
@@ -210,6 +252,8 @@ function StoryPageClient() {
     );
   }
 
+  const caregiverSummary: CaregiverSummary | undefined = sceneData?.caregiver_summary;
+
   return (
     <div className="min-h-screen bg-background px-6 py-10 text-white">
       <div className="mx-auto flex max-w-6xl flex-col gap-8">
@@ -221,7 +265,7 @@ function StoryPageClient() {
               <p className="font-nunito text-sm uppercase tracking-[0.35em] text-cyan-200/90">Прогрес</p>
               <h1 className="mt-2 font-lora text-4xl font-semibold text-white">Чарівна історія</h1>
               <p className="mt-3 max-w-2xl text-base leading-7 text-slate-300">
-                Герой: {hero}, місце: {place}, тема: {theme}.
+                Герой: {characterName}, локація: {locationLabels[location] ?? location}, навичка: {skillLabels[skill] ?? skill}.
               </p>
             </div>
             <div className="flex items-center gap-2">
@@ -260,9 +304,11 @@ function StoryPageClient() {
                 <p className="font-lora text-2xl leading-9 text-slate-100">
                   {sceneData.ending ? "Кінець казки" : `Сцена ${scene}`}
                 </p>
-                <img
+                <Image
                   src={locationImage}
-                  alt={place}
+                  alt={locationLabels[location] ?? location}
+                  width={680}
+                  height={180}
                   style={{
                     width: "100%",
                     height: "180px",
@@ -278,28 +324,71 @@ function StoryPageClient() {
                 </p>
               </div>
 
-              {/* Фінал — саммарі для батьків */}
+              {/* Фінал — дитячий фінал + окремий блок для батьків */}
               {sceneData.ending ? (
                 <div className="space-y-6">
-                  <div className="rounded-3xl border border-white/10 bg-[#15122f] p-6">
-                    <p className="font-lora text-xl font-semibold text-white">Ваша історія:</p>
-                    <p className="mt-3 italic text-[#b0a8e0]">{sceneData.summary}</p>
-                  </div>
-                  <div className="rounded-3xl border border-white/10 bg-[#15122f] p-6">
-                    <p className="font-lora text-xl font-semibold text-white">А якби...</p>
-                    <p className="mt-3 text-sm text-[#6060a0]">{sceneData.alternative}</p>
-                  </div>
-                  <div className="rounded-3xl border border-[rgba(200,168,64,0.3)] bg-[#15122f] p-6">
-                    <p className="font-lora text-xl font-semibold text-[#c8a840]">Запитайте у дитини:</p>
-                    <p className="mt-3 text-base text-[#c8a840]">{sceneData.parent_prompt}</p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => router.push("/create")}
-                    className="inline-flex items-center justify-center rounded-full bg-linear-to-r from-violet-500 via-cyan-400 to-amber-400 px-6 py-3 text-sm font-semibold text-background"
-                  >
-                    Почати нову казку
-                  </button>
+                  {!showCaregiverSummary ? (
+                    <div className="flex flex-col gap-4 sm:flex-row">
+                      <button
+                        type="button"
+                        onClick={() => setShowCaregiverSummary(true)}
+                        className="inline-flex items-center justify-center rounded-full border border-[rgba(200,168,64,0.4)] bg-white/5 px-6 py-3 text-sm font-semibold text-[#c8a840] transition hover:bg-white/10"
+                      >
+                        Для батьків
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => router.push("/create")}
+                        className="inline-flex items-center justify-center rounded-full bg-linear-to-r from-violet-500 via-cyan-400 to-amber-400 px-6 py-3 text-sm font-semibold text-background"
+                      >
+                        Почати нову казку
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      {caregiverSummary ? (
+                        <div className="rounded-3xl border border-white/10 bg-[#15122f] p-6">
+                          <p className="font-lora text-xl font-semibold text-white">{caregiverSummary.skill_name}</p>
+                          <p className="mt-3 text-sm text-slate-300">{caregiverSummary.skill_in_plain_language}</p>
+                          <p className="mt-3 text-sm text-slate-400">{caregiverSummary.why_it_matters}</p>
+                          <p className="mt-4 text-base text-cyan-100">
+                            <span className="font-semibold">Спробуйте сьогодні: </span>
+                            {caregiverSummary.try_today}
+                          </p>
+                          <p className="mt-3 rounded-2xl bg-white/5 p-3 text-sm italic text-slate-200">
+                            «{caregiverSummary.caregiver_phrase}»
+                          </p>
+                          {caregiverSummary.optional_extra_idea ? (
+                            <p className="mt-3 text-sm text-slate-400">{caregiverSummary.optional_extra_idea}</p>
+                          ) : null}
+                          {caregiverSummary.childhood_memory_prompt ? (
+                            <p className="mt-4 border-t border-white/10 pt-4 text-sm text-[#b0a8e0]">
+                              {caregiverSummary.childhood_memory_prompt}
+                            </p>
+                          ) : null}
+                        </div>
+                      ) : null}
+                      {sceneData.alternative ? (
+                        <div className="rounded-3xl border border-white/10 bg-[#15122f] p-6">
+                          <p className="font-lora text-xl font-semibold text-white">А якби...</p>
+                          <p className="mt-3 text-sm text-[#6060a0]">{sceneData.alternative}</p>
+                        </div>
+                      ) : null}
+                      {sceneData.parent_prompt ? (
+                        <div className="rounded-3xl border border-[rgba(200,168,64,0.3)] bg-[#15122f] p-6">
+                          <p className="font-lora text-xl font-semibold text-[#c8a840]">Запитайте у дитини:</p>
+                          <p className="mt-3 text-base text-[#c8a840]">{sceneData.parent_prompt}</p>
+                        </div>
+                      ) : null}
+                      <button
+                        type="button"
+                        onClick={() => router.push("/create")}
+                        className="inline-flex items-center justify-center rounded-full bg-linear-to-r from-violet-500 via-cyan-400 to-amber-400 px-6 py-3 text-sm font-semibold text-background"
+                      >
+                        Почати нову казку
+                      </button>
+                    </>
+                  )}
                 </div>
               ) : (
                 /* Вибори */

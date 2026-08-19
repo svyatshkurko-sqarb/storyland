@@ -1,0 +1,14 @@
+{
+  "skill_name": "Саморегуляція",
+  "skill_in_plain_language": "Це вміння зробити коротку паузу, коли дуже хочеться щось негайно, і лише потім діяти.",
+  "why_it_matters": "Пауза допомагає легше переживати очікування й дрібні невдачі, не ховаючи свої почуття.",
+  "try_today": "У напруженій ситуації запропонуйте дитині зупинитися й обрати один із двох простих наступних кроків.",
+  "caregiver_phrase": "Хочеш зробити паузу, чи спробувати ще раз?",
+  "optional_extra_idea": null,
+  "childhood_memory_prompt": "Чи була у вас схожа ситуація в дитинстві?",
+  "age_band": "3-5",
+  "source_story_id": "fallback",
+  "source_skill_subtopic": "pause_before_action",
+  "language": "uk",
+  "generation_version": "fallback-0.1"
+}

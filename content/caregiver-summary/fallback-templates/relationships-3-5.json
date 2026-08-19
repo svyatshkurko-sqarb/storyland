@@ -1,0 +1,14 @@
+{
+  "skill_name": "Стосунки та взаємодія",
+  "skill_in_plain_language": "Уміння запропонувати спільну гру і домовитись про просте правило разом з іншими.",
+  "why_it_matters": "Це допомагає дитині залишатись у грі з іншими дітьми, навіть коли хочеться різного.",
+  "try_today": "Запропонуйте разом придумати одне просте правило для спільної гри вдома.",
+  "caregiver_phrase": "Як ми можемо погратися так, щоб було цікаво всім?",
+  "optional_extra_idea": null,
+  "childhood_memory_prompt": "Чи пригадуєте гру, у яку любили грати в дитинстві з друзями?",
+  "age_band": "3-5",
+  "source_story_id": "fallback",
+  "source_skill_subtopic": "propose_shared_play",
+  "language": "uk",
+  "generation_version": "fallback-0.1"
+}
