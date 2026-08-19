@@ -1,10 +1,11 @@
 {
-  "version": "0.1",
-  "note": "Крок 1 (Варіант А, еволюційна міграція): контент-бібліотека для простого 2-кроквого циклу генерація+верифікація в app/api/story/route.ts. Повна 8-крокова pipeline і story_state — пізніший крок.",
+  "version": "0.2",
+  "note": "Крок 1-2 (Варіант А): контент-бібліотека для простого 2-кроквого циклу генерація+верифікація. Крок 3, інкремент 1: додано choiceTypes — кількість сцен/виборів тепер визначає lib/storyStructure.ts за віком. Повна 8-крокова pipeline і story_state — пізніший інкремент.",
   "shared": {
     "proseCraft": "content/prose-craft.md",
     "safetyGuardrails": "content/safety-guardrails.md",
-    "caregiverSummarySpec": "content/caregiver-summary/spec.md"
+    "caregiverSummarySpec": "content/caregiver-summary/spec.md",
+    "choiceTypes": "content/narrative-structure/choice-types.md"
   },
   "skills": {
     "self_regulation": {

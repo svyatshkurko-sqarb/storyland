@@ -1,9 +1,15 @@
--- Storyland — схема БД (Supabase Postgres), Крок 2 міграції (Варіант А).
+-- Storyland — схема БД (Supabase Postgres), Крок 2-3 міграції (Варіант А).
 --
 -- Це НЕ повна схема з архітектурного документа (story_state 19 полів,
 -- acceptance_checks 27 полів) — та розрахована на повну 8-кроквеу pipeline,
--- яка ще не підключена (Крок 3). Тут — мінімум, що дає реальну persistence
--- поверх наявного простого 2-кроквого циклу генерація+верифікація.
+-- яка ще не підключена (наступний інкремент Кроку 3). Тут — мінімум, що дає
+-- реальну persistence поверх наявного простого 2-кроквого циклу
+-- генерація+верифікація.
+--
+-- Крок 3, інкремент 1 (totalScenes/choice_type за фреймворком): додано
+-- scene_kind ('choice'|'transition'|'final') і розширено choice_type до
+-- 3 значень фреймворку. Старі значення 'сюжетний'/'тематичний' лишені у
+-- CHECK для сумісності з рядками, записаними до цієї міграції.
 --
 -- Дизайн-рішення: історія записується в БД ОДНИМ разом, коли генерується
 -- фінальна сцена (route.ts має на той момент повний sceneContextHistory
@@ -39,8 +45,9 @@ create table if not exists scenes (
   scene_number int not null,
   created_at timestamptz not null default now(),
   is_final boolean not null default false,
+  scene_kind text not null default 'choice' check (scene_kind in ('choice', 'transition', 'final')),
   scene_text text,
-  choice_type text check (choice_type in ('сюжетний', 'тематичний', null)),
+  choice_type text check (choice_type in ('пригодницький', 'тематично-контрастний', 'інтеграційний', 'сюжетний', 'тематичний', null)),
   chosen_option text check (chosen_option in ('A', 'B', null)),
   chosen_choice_text text,
   unchosen_choice_text text,

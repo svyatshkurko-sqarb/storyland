@@ -9,17 +9,35 @@ import {
   type StoryParams,
 } from "@/lib/contentAssembler";
 import { getServiceSupabase, isSupabaseConfigured } from "@/lib/db/client";
+import { getSceneStep, getStoryStructure, type AgeBand, type ChoiceType } from "@/lib/storyStructure";
 
 const client = new Anthropic();
 
+const CHOICE_TYPE_GUIDANCE: Record<ChoiceType, string> = {
+  "пригодницький": `ПРИГОДНИЦЬКИЙ ВИБІР
+Чистий вибір пригоди. Обидва варіанти нейтральні — просто різні напрямки.
+Мета: дитина відчуває що керує історією. Не визначає морально правильну поведінку.`,
+  "тематично-контрастний": `ТЕМАТИЧНО-КОНТРАСТНИЙ ВИБІР
+Два варіанти контрастно відображають типовий неефективний спосіб дії проти альтернативної
+стратегії з навички вище (див. "Заборонені формулювання варіантів вибору" в навичці — це НЕ
+очевидне добре/погане, обидва варіанти психологічно правдоподібні).
+Дитина моделює реальну ситуацію через безпечний простір казки.`,
+  "інтеграційний": `ІНТЕГРАЦІЙНИЙ ВИБІР
+Перевіряє перенесення навички в нову ситуацію, відмінну від попередньої. Обидва варіанти —
+різні конкретні способи застосувати те, чого герой уже вчився в цій казці (напр. назвати що
+відчуває й запропонувати рішення / зробити паузу / запропонувати два варіанти домовленості).
+Не повторює дослівно попередній вибір цієї казки.`,
+};
+
 // ═══════════════════════════════════════
-// USER ПРОМПТ — генерація сцени
+// USER ПРОМПТ — генерація сцени з вибором
 // ═══════════════════════════════════════
 function buildScenePrompt({
   skillSubtopic,
   characterName,
   scene,
   totalScenes,
+  choiceType,
   historyText,
   usedMaybePhrase,
   usedEtiquette,
@@ -28,6 +46,7 @@ function buildScenePrompt({
   characterName: string;
   scene: number;
   totalScenes: number;
+  choiceType: ChoiceType;
   historyText: string;
   usedMaybePhrase: boolean;
   usedEtiquette: boolean;
@@ -50,30 +69,61 @@ ${usedEtiquette ? '— Момент етикету вже був — в цій �
 
 ВИБІР ДЛЯ ДИТИНИ
 
-Два типи вибору — чергуй їх протягом казки:
+Тип вибору для ЦІЄЇ сцени заданий наперед (не обирай сам): **${choiceType}**.
 
-ТИП 1 — СЮЖЕТНИЙ
-Чистий вибір пригоди. Обидва варіанти нейтральні — просто різні напрямки.
-Мета: дитина відчуває що керує історією.
+${CHOICE_TYPE_GUIDANCE[choiceType]}
 
-ТИП 2 — ТЕМАТИЧНИЙ
-Два варіанти контрастно відображають типовий неефективний спосіб дії проти альтернативної
-стратегії з навички вище (див. "Заборонені формулювання варіантів вибору" в навичці — це НЕ
-очевидне добре/погане, обидва варіанти психологічно правдоподібні).
-Дитина моделює реальну ситуацію через безпечний простір казки.
-Обов'язково є хоча б один тематичний вибір за казку.
-
-ПРАВИЛА ДЛЯ ОБОХ ТИПІВ:
+ПРАВИЛА:
 — Формулювання від імені героя: не "що зробити ${characterName}?" а "${characterName} подивився вперед... і назад... Куди йти?"
 — Обидва варіанти однаково привабливі
-— Дотримуйся обмежень вікового режиму (к-сть сцен/персонажів/мова) з розділу вище
+— Дотримуйся обмежень вікового режиму (к-сть персонажів/мова) з розділу вище
 
 Відповідай ТІЛЬКИ JSON без markdown і без пояснень:
-{"scene_text":"...","choice_a":"...","choice_b":"...","choice_type":"сюжетний/тематичний","used_maybe_phrase":true/false,"used_etiquette":true/false}`;
+{"scene_text":"...","choice_a":"...","choice_b":"...","used_maybe_phrase":true/false,"used_etiquette":true/false}`;
 }
 
 // ═══════════════════════════════════════
-// ПРОМПТ ВЕРИФІКАЦІЇ
+// USER ПРОМПТ — перехідна сцена (без вибору)
+// ═══════════════════════════════════════
+function buildTransitionPrompt({
+  skillSubtopic,
+  characterName,
+  scene,
+  totalScenes,
+  historyText,
+  usedMaybePhrase,
+  usedEtiquette,
+}: {
+  skillSubtopic: string;
+  characterName: string;
+  scene: number;
+  totalScenes: number;
+  historyText: string;
+  usedMaybePhrase: boolean;
+  usedEtiquette: boolean;
+}) {
+  return `Поведінкова підтема цієї казки: ${skillSubtopic}.
+Це сцена ${scene} з ${totalScenes} — ПЕРЕХІДНА, без вибору для дитини.
+
+Імʼя героя НЕ ЗМІНЮЄТЬСЯ протягом всієї казки — завжди ${characterName}.
+
+КОНТЕКСТ ПОПЕРЕДНІХ СЦЕН:
+${historyText}
+
+Напиши коротку сцену (2-4 речення), яка природно продовжує наслідок попереднього вибору
+дитини й веде до наступної точки вибору. Це не самостійна пригода — місток між двома
+виборами: показує безпосередній результат попереднього рішення (через дію/діалог/деталь,
+не пояснення) і відкриває наступну ситуацію.
+
+${usedMaybePhrase ? '— Майже-фраза вже була використана раніше — в цій сцені її НЕ МАЄ БУТИ.' : ''}
+${usedEtiquette ? '— Момент етикету вже був — в цій сцені не потрібен.' : ''}
+
+Відповідай ТІЛЬКИ JSON без markdown і без пояснень:
+{"scene_text":"...","used_maybe_phrase":true/false,"used_etiquette":true/false}`;
+}
+
+// ═══════════════════════════════════════
+// ПРОМПТ ВЕРИФІКАЦІЇ — сцена з вибором
 // ═══════════════════════════════════════
 function buildVerificationPrompt({
   scene_text,
@@ -86,7 +136,7 @@ function buildVerificationPrompt({
   scene_text: string;
   choice_a: string;
   choice_b: string;
-  choice_type: string;
+  choice_type: ChoiceType;
   skillSubtopic: string;
   historyText: string;
 }) {
@@ -111,9 +161,9 @@ ${scene_text}
 
 4. немає_незрозумілих_метафор — відсутні поетичні образи які треба пояснювати дитині відповідного віку. (true/false)
 
-5. вибір_збалансований — обидва варіанти однаково привабливі, жоден не виглядає як очевидно правильний або очевидно поганий (див. safety-засади: заборонено очевидне добре/погане, безпечне проти небезпечного, "ти помилився"). (true/false)
+5. вибір_збалансований — обидва варіанти однаково привабливі, жоден не виглядає як очевидно правильний або очевидно поганий, жоден не порушує щойно встановлене правило так, що виглядає "тестом слухняності" (див. safety-засади: заборонено очевидне добре/погане, безпечне проти небезпечного, "ти помилився"). (true/false)
 
-6. тематичний_вибір_коректний — перевіряти ТІЛЬКИ якщо choice_type="тематичний": два варіанти контрастно відображають неефективний спосіб дії проти альтернативної стратегії з навички, жоден не є явно "поганим вчинком". Якщо choice_type="сюжетний" — автоматично true. (true/false)
+6. тип_вибору_коректний — звір з вимогами типу "${choice_type}" з розділу "Типи виборів" вище: для тематично-контрастного — контраст неефективного способу дії й альтернативної стратегії з навички; для інтеграційного — перенесення навички в нову ситуацію, не дослівний повтор попереднього вибору цієї казки; для пригодницького — нейтральний вибір напрямку, без моральної оцінки. (true/false)
 
 7. safety_якорі_дотримані — не порушено жодне з правил BLOCK у safety-засадах вище (три якорі безпеки, межа емоційної інтенсивності, відповідальність дитини, природні наслідки). (true/false)
 
@@ -128,7 +178,35 @@ ${scene_text}
 Пункти 8-11 не впливають на пройшла — але фіксуються для логів.
 
 Відповідай ТІЛЬКИ JSON:
-{"немає_авторських_коментарів":true/false,"немає_шаблонних_дій":true/false,"немає_прямої_моралі":true/false,"немає_незрозумілих_метафор":true/false,"вибір_збалансований":true/false,"тематичний_вибір_коректний":true/false,"safety_якорі_дотримані":true/false,"є_діалог":true/false,"є_центральний_момент":true/false,"майже_фраза_не_повторюється":true/false,"етикет_не_повторюється":true/false,"пройшла":true/false,"причина_відмови":"..."/null}`;
+{"немає_авторських_коментарів":true/false,"немає_шаблонних_дій":true/false,"немає_прямої_моралі":true/false,"немає_незрозумілих_метафор":true/false,"вибір_збалансований":true/false,"тип_вибору_коректний":true/false,"safety_якорі_дотримані":true/false,"є_діалог":true/false,"є_центральний_момент":true/false,"майже_фраза_не_повторюється":true/false,"етикет_не_повторюється":true/false,"пройшла":true/false,"причина_відмови":"..."/null}`;
+}
+
+// ═══════════════════════════════════════
+// ПРОМПТ ВЕРИФІКАЦІЇ — перехідна сцена (без вибору, коротша перевірка)
+// ═══════════════════════════════════════
+function buildTransitionVerificationPrompt({
+  scene_text,
+  historyText,
+}: {
+  scene_text: string;
+  historyText: string;
+}) {
+  return `Перевір цю коротку перехідну сцену дитячої казки (без вибору для дитини). Відповідай тільки JSON.
+
+СЦЕНА:
+${scene_text}
+
+КОНТЕКСТ: ${historyText}
+
+1. немає_авторських_коментарів — відсутні описи внутрішнього стану героя від автора ("відчув", "стало тепло"). (true/false)
+2. немає_прямої_моралі — без повчального висновку. (true/false)
+3. логічно_продовжує_контекст — сцена є прямим і зрозумілим наслідком попереднього вибору, не суперечить контексту. (true/false)
+4. safety_якорі_дотримані — не порушено правил BLOCK із safety-засад. (true/false)
+
+пройшла:false ТІЛЬКИ якщо хоча б один з пунктів 1-4 є false.
+
+Відповідай ТІЛЬКИ JSON:
+{"немає_авторських_коментарів":true/false,"немає_прямої_моралі":true/false,"логічно_продовжує_контекст":true/false,"safety_якорі_дотримані":true/false,"пройшла":true/false,"причина_відмови":"..."/null}`;
 }
 
 // ═══════════════════════════════════════
@@ -224,7 +302,8 @@ interface SceneContext {
   scene: number;
   scene_text: string;
   choice_made: string;
-  choice_type?: string;
+  scene_kind?: "choice" | "transition" | "final";
+  choice_type?: ChoiceType;
   chosen_option?: "A" | "B";
   chosen_choice_text?: string;
   unchosen_choice_text?: string;
@@ -289,15 +368,17 @@ async function persistCompletedStory({
     const sceneRows = sceneContextHistory.map((s) => {
       const [label, ...rest] = s.choice_made.split(": ");
       const chosenText = s.chosen_choice_text ?? rest.join(": ");
+      const isTransition = s.scene_kind === "transition";
       return {
         story_id: storyId,
         scene_number: s.scene,
         is_final: false,
+        scene_kind: s.scene_kind ?? "choice",
         scene_text: s.scene_text,
         choice_type: s.choice_type ?? null,
-        chosen_option: s.chosen_option ?? (label === "A" || label === "B" ? label : null),
-        chosen_choice_text: chosenText || null,
-        unchosen_choice_text: s.unchosen_choice_text ?? null,
+        chosen_option: isTransition ? null : s.chosen_option ?? (label === "A" || label === "B" ? label : null),
+        chosen_choice_text: isTransition ? null : chosenText || null,
+        unchosen_choice_text: isTransition ? null : s.unchosen_choice_text ?? null,
         used_maybe_phrase: s.used_maybe_phrase ?? false,
         used_etiquette: s.used_etiquette ?? false,
       };
@@ -307,6 +388,7 @@ async function persistCompletedStory({
       story_id: storyId,
       scene_number: totalScenes,
       is_final: true,
+      scene_kind: "final",
       scene_text: ending,
       choice_type: null,
       chosen_option: null,
@@ -361,12 +443,10 @@ export async function POST(request: Request) {
       characterName: characterNameInput,
       sceneContextHistory = [],
       scene = 1,
-      totalScenes = 4,
     } = body as Partial<StoryParams> & {
       characterName?: string;
       sceneContextHistory?: SceneContext[];
       scene?: number;
-      totalScenes?: number;
     };
 
     if (!isValidStoryParams({ skill, skillSubtopic, character, location, ageBand })) {
@@ -379,7 +459,14 @@ export async function POST(request: Request) {
     const params = { skill, skillSubtopic, character, location, ageBand } as StoryParams;
     const characterInfo = getCharacterInfo(params.character);
     const characterName = characterNameInput?.trim() || characterInfo.defaultName;
-    const isFinalScene = Number(scene) >= Number(totalScenes);
+
+    // Крок 3: кількість сцен і послідовність choice/transition більше не
+    // приходять від клієнта — визначаються детерміновано з віку (lib/storyStructure.ts),
+    // щоб точно відповідати content/age-adapters/*.md (там "Обсяг" і "Вибори" — різні числа).
+    const structure = getStoryStructure(params.ageBand as AgeBand);
+    const totalScenes = structure.totalScenes;
+    const isFinalScene = Number(scene) >= totalScenes;
+    const sceneStep = isFinalScene ? null : getSceneStep(params.ageBand as AgeBand, Number(scene));
 
     const historyText =
       sceneContextHistory.length > 0
@@ -413,7 +500,7 @@ export async function POST(request: Request) {
       const storyId = await persistCompletedStory({
         params,
         characterName,
-        totalScenes: Number(totalScenes),
+        totalScenes,
         sceneContextHistory,
         ending: data.ending,
         caregiverSummary: data.caregiver_summary,
@@ -426,41 +513,70 @@ export async function POST(request: Request) {
         ...data,
         skill_name: getSkillName(params.skill),
         story_id: storyId,
+        total_scenes: totalScenes,
       });
     }
 
     // ЗВИЧАЙНА СЦЕНА — генерація + верифікація (максимум 2 спроби)
     const MAX_ATTEMPTS = 2;
     const sceneSystemPrompt = assembleSceneSystemPrompt(params);
+    const isTransition = sceneStep?.kind === "transition";
 
     for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-      const sceneData = await callClaude({
-        system: sceneSystemPrompt,
-        prompt: buildScenePrompt({
-          skillSubtopic: params.skillSubtopic,
-          characterName,
-          scene: Number(scene),
-          totalScenes: Number(totalScenes),
-          historyText,
-          usedMaybePhrase,
-          usedEtiquette,
-        }),
-        maxTokens: 2048,
-      });
+      const sceneData = isTransition
+        ? await callClaude({
+            system: sceneSystemPrompt,
+            prompt: buildTransitionPrompt({
+              skillSubtopic: params.skillSubtopic,
+              characterName,
+              scene: Number(scene),
+              totalScenes,
+              historyText,
+              usedMaybePhrase,
+              usedEtiquette,
+            }),
+            maxTokens: 1024,
+          })
+        : await callClaude({
+            system: sceneSystemPrompt,
+            prompt: buildScenePrompt({
+              skillSubtopic: params.skillSubtopic,
+              characterName,
+              scene: Number(scene),
+              totalScenes,
+              choiceType: sceneStep!.choiceType!,
+              historyText,
+              usedMaybePhrase,
+              usedEtiquette,
+            }),
+            maxTokens: 2048,
+          });
+
+      if (!isTransition) sceneData.choice_type = sceneStep!.choiceType;
+      sceneData.scene_kind = isTransition ? "transition" : "choice";
+      sceneData.total_scenes = totalScenes;
 
       let verification;
       try {
-        verification = await callClaude({
-          prompt: buildVerificationPrompt({
-            scene_text: sceneData.scene_text,
-            choice_a: sceneData.choice_a,
-            choice_b: sceneData.choice_b,
-            choice_type: sceneData.choice_type,
-            skillSubtopic: params.skillSubtopic,
-            historyText,
-          }),
-          maxTokens: 512,
-        });
+        verification = isTransition
+          ? await callClaude({
+              prompt: buildTransitionVerificationPrompt({
+                scene_text: sceneData.scene_text,
+                historyText,
+              }),
+              maxTokens: 256,
+            })
+          : await callClaude({
+              prompt: buildVerificationPrompt({
+                scene_text: sceneData.scene_text,
+                choice_a: sceneData.choice_a,
+                choice_b: sceneData.choice_b,
+                choice_type: sceneData.choice_type,
+                skillSubtopic: params.skillSubtopic,
+                historyText,
+              }),
+              maxTokens: 512,
+            });
       } catch (verifyError) {
         console.warn("Верифікація крашнулась:", (verifyError as Error).message);
         return Response.json(sceneData);
