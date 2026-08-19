@@ -34,6 +34,10 @@ interface SceneContext {
   scene: number;
   scene_text: string;
   choice_made: string;
+  choice_type?: string;
+  chosen_option?: "A" | "B";
+  chosen_choice_text?: string;
+  unchosen_choice_text?: string;
   used_maybe_phrase?: boolean;
   used_etiquette?: boolean;
 }
@@ -154,6 +158,10 @@ function StoryPageClient() {
             scene,
             scene_text: sceneData.scene_text,
             choice_made: `A: ${sceneData.choice_a}`,
+            choice_type: sceneData.choice_type,
+            chosen_option: "A",
+            chosen_choice_text: sceneData.choice_a,
+            unchosen_choice_text: sceneData.choice_b,
             used_maybe_phrase: sceneData.used_maybe_phrase,
             used_etiquette: sceneData.used_etiquette,
           },
@@ -170,6 +178,10 @@ function StoryPageClient() {
             scene,
             scene_text: sceneData.scene_text,
             choice_made: `B: ${sceneData.choice_b}`,
+            choice_type: sceneData.choice_type,
+            chosen_option: "B",
+            chosen_choice_text: sceneData.choice_b,
+            unchosen_choice_text: sceneData.choice_a,
             used_maybe_phrase: sceneData.used_maybe_phrase,
             used_etiquette: sceneData.used_etiquette,
           },
@@ -200,6 +212,10 @@ function StoryPageClient() {
       scene,
       scene_text: sceneData.scene_text,
       choice_made: `${optionLabel}: ${optionText}`,
+      choice_type: sceneData.choice_type,
+      chosen_option: optionLabel,
+      chosen_choice_text: optionText,
+      unchosen_choice_text: optionLabel === "A" ? sceneData.choice_b : sceneData.choice_a,
       used_maybe_phrase: sceneData.used_maybe_phrase,
       used_etiquette: sceneData.used_etiquette,
     };

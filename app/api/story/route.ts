@@ -8,6 +8,7 @@ import {
   loadFallbackCaregiverSummary,
   type StoryParams,
 } from "@/lib/contentAssembler";
+import { getServiceSupabase, isSupabaseConfigured } from "@/lib/db/client";
 
 const client = new Anthropic();
 
@@ -223,8 +224,126 @@ interface SceneContext {
   scene: number;
   scene_text: string;
   choice_made: string;
+  choice_type?: string;
+  chosen_option?: "A" | "B";
+  chosen_choice_text?: string;
+  unchosen_choice_text?: string;
   used_maybe_phrase?: boolean;
   used_etiquette?: boolean;
+}
+
+// ═══════════════════════════════════════
+// PERSISTENCE — записується ОДНИМ разом при генерації фінальної сцени
+// (див. коментар у lib/db/schema.sql чому не пер-сцена). Best-effort:
+// якщо Supabase не налаштований або запис впав — казка все одно
+// повертається дитині, помилка лише логується.
+// ═══════════════════════════════════════
+async function persistCompletedStory({
+  params,
+  characterName,
+  totalScenes,
+  sceneContextHistory,
+  ending,
+  caregiverSummary,
+  alternative,
+  parentPrompt,
+  usedFallback,
+}: {
+  params: StoryParams;
+  characterName: string;
+  totalScenes: number;
+  sceneContextHistory: SceneContext[];
+  ending: string;
+  caregiverSummary: Record<string, unknown> | undefined;
+  alternative: string | undefined;
+  parentPrompt: string | undefined;
+  usedFallback: boolean;
+}): Promise<string | null> {
+  if (!isSupabaseConfigured()) return null;
+
+  try {
+    const supabase = getServiceSupabase();
+
+    const { data: story, error: storyError } = await supabase
+      .from("stories")
+      .insert({
+        skill: params.skill,
+        skill_subtopic: params.skillSubtopic,
+        character: params.character,
+        character_name: characterName,
+        location: params.location,
+        age_band: params.ageBand,
+        total_scenes: totalScenes,
+        status: "completed",
+      })
+      .select("story_id")
+      .single();
+
+    if (storyError || !story) {
+      console.warn("Persist: не вдалося створити story:", storyError?.message);
+      return null;
+    }
+
+    const storyId = story.story_id as string;
+
+    const sceneRows = sceneContextHistory.map((s) => {
+      const [label, ...rest] = s.choice_made.split(": ");
+      const chosenText = s.chosen_choice_text ?? rest.join(": ");
+      return {
+        story_id: storyId,
+        scene_number: s.scene,
+        is_final: false,
+        scene_text: s.scene_text,
+        choice_type: s.choice_type ?? null,
+        chosen_option: s.chosen_option ?? (label === "A" || label === "B" ? label : null),
+        chosen_choice_text: chosenText || null,
+        unchosen_choice_text: s.unchosen_choice_text ?? null,
+        used_maybe_phrase: s.used_maybe_phrase ?? false,
+        used_etiquette: s.used_etiquette ?? false,
+      };
+    });
+
+    sceneRows.push({
+      story_id: storyId,
+      scene_number: totalScenes,
+      is_final: true,
+      scene_text: ending,
+      choice_type: null,
+      chosen_option: null,
+      chosen_choice_text: null,
+      unchosen_choice_text: null,
+      used_maybe_phrase: false,
+      used_etiquette: false,
+    });
+
+    const { error: scenesError } = await supabase.from("scenes").insert(sceneRows);
+    if (scenesError) console.warn("Persist: не вдалося записати scenes:", scenesError.message);
+
+    if (caregiverSummary) {
+      const { error: summaryError } = await supabase.from("caregiver_summaries").insert({
+        story_id: storyId,
+        skill_name: caregiverSummary.skill_name ?? null,
+        skill_in_plain_language: caregiverSummary.skill_in_plain_language ?? null,
+        why_it_matters: caregiverSummary.why_it_matters ?? null,
+        try_today: caregiverSummary.try_today ?? null,
+        caregiver_phrase: caregiverSummary.caregiver_phrase ?? null,
+        optional_extra_idea: caregiverSummary.optional_extra_idea ?? null,
+        childhood_memory_prompt: caregiverSummary.childhood_memory_prompt ?? null,
+        alternative: alternative ?? null,
+        parent_prompt: parentPrompt ?? null,
+      });
+      if (summaryError) console.warn("Persist: не вдалося записати caregiver_summary:", summaryError.message);
+    }
+
+    if (usedFallback) {
+      console.warn(`Persist: story ${storyId} завершилась з fallback caregiver_summary.`);
+    }
+
+    return storyId;
+  } catch (err) {
+    console.warn("Persist: неочікувана помилка:", (err as Error).message);
+    return null;
+  }
 }
 
 // ═══════════════════════════════════════
@@ -274,7 +393,7 @@ export async function POST(request: Request) {
 
     // ФІНАЛЬНА СЦЕНА
     if (isFinalScene) {
-      const data = await callClaude({
+      let data = await callClaude({
         system: assembleFinalSystemPrompt(params),
         prompt: buildFinalPrompt({
           characterName,
@@ -284,9 +403,29 @@ export async function POST(request: Request) {
         }),
         maxTokens: 2048,
       });
+
+      let usedFallback = false;
+      if (!data.caregiver_summary) {
+        usedFallback = true;
+        data = { ...data, caregiver_summary: loadFallbackCaregiverSummary(params.skill, params.ageBand) };
+      }
+
+      const storyId = await persistCompletedStory({
+        params,
+        characterName,
+        totalScenes: Number(totalScenes),
+        sceneContextHistory,
+        ending: data.ending,
+        caregiverSummary: data.caregiver_summary,
+        alternative: data.alternative,
+        parentPrompt: data.parent_prompt,
+        usedFallback,
+      });
+
       return Response.json({
         ...data,
         skill_name: getSkillName(params.skill),
+        story_id: storyId,
       });
     }
 
