@@ -148,7 +148,7 @@ function StoryPageClient() {
 
   // Pre-generate наступну сцену(и) поки дитина читає поточну
   useEffect(() => {
-    if (!sceneData || sceneData.ending) return;
+    if (process.env.NODE_ENV !== "production" || !sceneData || sceneData.ending) return;
 
     const nextSceneNum = scene + 1;
     const knownTotal = sceneData.total_scenes ?? totalScenes;
