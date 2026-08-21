@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useMemo, useState, useRef } from "react";
 import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
+import { getBuildMarker } from "@/lib/version";
 
 const locationImages: Record<string, string> = {
   forest: "/locations/forest.svg",
@@ -339,6 +340,9 @@ function StoryPageClient() {
             Обрати казку
           </button>
         </div>
+        <p className="text-center text-[10px] uppercase tracking-widest text-slate-600">
+          {getBuildMarker()}
+        </p>
       </div>
     );
   }
