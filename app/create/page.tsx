@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { getBuildMarker } from "@/lib/version";
 
 // MVP-скоуп: 2 навички × 2 підтеми, 2 героя, 4 локації, 2 вікові режими.
 // Джерело контенту: /content (skills, characters, locations, age-adapters) —
@@ -197,6 +198,9 @@ export default function CreatePage() {
             Почати казку
           </button>
         </div>
+        <p className="text-center text-[10px] uppercase tracking-widest text-slate-600">
+          {getBuildMarker()}
+        </p>
       </div>
     </div>
   );
