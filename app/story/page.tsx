@@ -286,6 +286,31 @@ function StoryPageClient() {
     await advance([...sceneContextHistory, newContext], optionLabel);
   }
 
+  // "Обрати інакше" — відмотати останній вибір дитини на один запис назад і
+  // перегенерувати ПОТОЧНУ (уже показану) сцену з альтернативним варіантом.
+  // Номер сцени (scene) НЕ змінюється — міняється лише хвіст sceneContextHistory.
+  async function handleRerollChoice() {
+    if (loading) return;
+    if (sceneContextHistory.length === 0) return;
+    const lastEntry = sceneContextHistory[sceneContextHistory.length - 1];
+    if (lastEntry.scene_kind !== "choice" || !lastEntry.chosen_option) return;
+
+    const altOption: "A" | "B" = lastEntry.chosen_option === "A" ? "B" : "A";
+    const altText = lastEntry.unchosen_choice_text ?? "";
+    const altEntry: SceneContext = {
+      ...lastEntry,
+      chosen_option: altOption,
+      choice_made: `${altOption}: ${altText}`,
+      chosen_choice_text: altText,
+      unchosen_choice_text: lastEntry.chosen_choice_text,
+    };
+
+    const newHistory = [...sceneContextHistory.slice(0, -1), altEntry];
+    pregenRef.current = {}; // старий pre-generated контент для цієї позиції вже не валідний
+    setSceneContextHistory(newHistory);
+    await loadScene(scene, newHistory);
+  }
+
   async function handleContinue() {
     if (!sceneData) return;
 
@@ -321,6 +346,12 @@ function StoryPageClient() {
   const caregiverSummary: CaregiverSummary | undefined = sceneData?.caregiver_summary;
   const isChoiceScene = Boolean(sceneData && !sceneData.ending && sceneData.scene_kind !== "transition");
   const isTransitionScene = Boolean(sceneData && !sceneData.ending && sceneData.scene_kind === "transition");
+  // Кнопка "Обрати інакше" — тільки коли поточна сцена є результатом попереднього
+  // вибору (не транзиту, не перша сцена) і ми не на фінальному екрані.
+  const lastHistoryEntry = sceneContextHistory[sceneContextHistory.length - 1];
+  const canRerollChoice = Boolean(
+    sceneData && !sceneData.ending && lastHistoryEntry && lastHistoryEntry.scene_kind === "choice",
+  );
 
   return (
     <div className="min-h-screen bg-background px-6 py-10 text-white">
@@ -391,6 +422,19 @@ function StoryPageClient() {
                   {sceneData.ending ? sceneData.ending : sceneData.scene_text}
                 </p>
               </div>
+
+              {/* Обрати інакше — відмотати останній вибір і перегенерувати цю сцену */}
+              {canRerollChoice ? (
+                <div className="flex justify-center">
+                  <button
+                    type="button"
+                    onClick={handleRerollChoice}
+                    className="inline-flex items-center justify-center rounded-full border border-white/15 bg-white/5 px-5 py-2 text-sm font-semibold text-slate-300 transition hover:bg-white/10"
+                  >
+                    ↩ Обрати інакше
+                  </button>
+                </div>
+              ) : null}
 
               {/* Фінал — дитячий фінал + окремий блок для батьків */}
               {sceneData.ending ? (
