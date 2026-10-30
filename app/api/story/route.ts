@@ -293,7 +293,7 @@ async function callClaude({
   maxTokens?: number;
 }) {
   const params: Anthropic.MessageCreateParamsNonStreaming = {
-    model: "claude-sonnet-4-5",
+    model: "claude-sonnet-5-5",
     max_tokens: maxTokens,
     messages: [{ role: "user", content: prompt }],
   };
